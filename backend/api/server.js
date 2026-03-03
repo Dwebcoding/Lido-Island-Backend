@@ -22,7 +22,14 @@ app.post('/api/payment/webhook', express.raw({ type: 'application/json' }), (req
 });
 
 // Middleware generali
-app.use(cors());
+const corsOptions = {
+  origin: ['https://www.isolalido.it', 'https://isolalido.it'],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  preflightContinue: false
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 // Salta il parser JSON per il webhook per evitare che il body venga alterato
 app.use((req, res, next) => {
   if (req.originalUrl.startsWith('/api/payment/webhook')) return next();

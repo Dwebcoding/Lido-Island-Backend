@@ -25,7 +25,14 @@ app.post('/api/payment/webhook', express.raw({ type: 'application/json' }), (req
 });
 
 // Ora applico i middleware per tutte le altre route
-app.use(cors());
+const corsOptions = {
+	origin: ['https://www.isolalido.it', 'https://isolalido.it'],
+	methods: ['GET', 'POST', 'OPTIONS'],
+	allowedHeaders: ['Content-Type', 'Authorization'],
+	preflightContinue: false
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // Parser JSON globale, ma salta il webhook Stripe per evitare qualunque
 // alterazione del corpo che invaliderebbe la firma.
