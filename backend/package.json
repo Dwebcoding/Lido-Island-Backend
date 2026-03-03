@@ -1,10 +1,19 @@
 {
   "name": "lido-backend",
   "version": "1.0.0",
-  "main": "server.cjs",
-  "type": "commonjs",
-  "dependencies": {},
+  "main": "server.js",
+  "type": "module",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^16.3.1",
+    "express": "^5.2.1",
+    "mongoose": "^9.2.1",
+    "node-fetch": "^3.3.2",
+    "nodemailer": "^8.0.1",
+    "stripe": "^20.3.1",
+    "twilio": "^4.7.0"
+  },
   "scripts": {
-    "start": "node server.cjs"
+    "start": "node server.js"
   }
 }
