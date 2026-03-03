@@ -16,6 +16,7 @@ if (isPlaceholderKey) {
   console.warn('[Stripe] STRIPE_SECRET_KEY mancante o placeholder. Checkout disabilitato finché non configuri la chiave.');
 } else {
   stripe = new Stripe(stripeSecret, { apiVersion: null });
+  console.log('[Stripe] secret prefix', stripeSecret?.slice(0, 4));
 }
 
 // Webhook handler
