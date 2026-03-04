@@ -4,16 +4,18 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 let twilioClient = null;
-try {
-  // lazy import to avoid throwing if not installed/used
-  // eslint-disable-next-line import/no-extraneous-dependencies
-  const twilio = await import('twilio').catch(() => null);
-  if (twilio && process.env.TWILIO_SID && process.env.TWILIO_AUTH_TOKEN) {
-    twilioClient = twilio.default(process.env.TWILIO_SID, process.env.TWILIO_AUTH_TOKEN);
+// Initialize optional Twilio client lazily without top-level await
+const twilioInitPromise = (async () => {
+  try {
+    // eslint-disable-next-line import/no-extraneous-dependencies
+    const twilio = await import('twilio').catch(() => null);
+    if (twilio && process.env.TWILIO_SID && process.env.TWILIO_AUTH_TOKEN) {
+      twilioClient = twilio.default(process.env.TWILIO_SID, process.env.TWILIO_AUTH_TOKEN);
+    }
+  } catch (e) {
+    // ignore
   }
-} catch (e) {
-  // ignore
-}
+})();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -73,6 +75,7 @@ export default {
   // Invia una mail al proprietario dopo una prenotazione
   async sendOwnerNotification({ booking = {}, amount = 0 }) {
     try {
+      await twilioInitPromise;
       console.log('[MAILER] sendOwnerNotification start');
       const tables_count = booking.tables || booking.tables_count || 0;
       const chairs_count = booking.chairs || booking.chairs_count || 0;
@@ -146,6 +149,7 @@ export default {
   // Invia conferma al cliente (semplice)
   async sendCustomerConfirmation({ to, booking = {}, amount = 0 }) {
     try {
+      await twilioInitPromise;
       console.log('[MAILER] sendCustomerConfirmation start');
       const name = booking.name || booking.customer_name || '';
       const bookingId = booking._id || booking.id || booking.booking_id || '';
