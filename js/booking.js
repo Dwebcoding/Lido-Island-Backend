@@ -33,17 +33,15 @@ const BOOKING_CONFIG = {
 // Endpoint API
 // - default: produzione su backend Vercel
 // - override dominio con ?apiHost=tuo-backend.vercel.app
-// - forzi locale con ?api=local
-const DEFAULT_PROD_API = 'https://backend-beige-nu-33.vercel.app/';
+const DEFAULT_PROD_API = 'https://backend-atrfva4ai-dwebcodings-projects-ab095673.vercel.app';
 const LOCAL_API = 'http://localhost:3000';
 const params = new URLSearchParams(window.location.search);
-const forceLocal = params.get('api') === 'local';
 const apiHostOverride = params.get('apiHost');
 const isLocalHost = ['localhost', '127.0.0.1', ''].includes(window.location.hostname) || window.location.protocol === 'file:';
 const prodApi = apiHostOverride
   ? (apiHostOverride.startsWith('http') ? apiHostOverride : `https://${apiHostOverride}`)
   : DEFAULT_PROD_API;
-const API_BASE = forceLocal || isLocalHost ? LOCAL_API : prodApi;
+const API_BASE = isLocalHost ? LOCAL_API : prodApi;
 
 
 // ============ VARIABILI GLOBALI ============
