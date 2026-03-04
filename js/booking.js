@@ -54,10 +54,18 @@ function resolveApiBase() {
     if (apiHostOverride) return apiHostOverride;
 
     const fromWindow = normalizeApiBase(window.LIDO_API_BASE);
-    if (fromWindow) return fromWindow;
+    if (fromWindow) {
+        // Fallback temporaneo finché api.isolalido.it non è configurato a DNS
+        if (fromWindow.includes('api.isolalido.it')) return LEGACY_PROD_FALLBACK_API;
+        return fromWindow;
+    }
 
     const fromMeta = normalizeApiBase(document.querySelector('meta[name="lido-api-base"]')?.content || '');
-    if (fromMeta) return fromMeta;
+    if (fromMeta) {
+        // Fallback temporaneo finché api.isolalido.it non è configurato a DNS
+        if (fromMeta.includes('api.isolalido.it')) return LEGACY_PROD_FALLBACK_API;
+        return fromMeta;
+    }
 
     const isLocalHost = ['localhost', '127.0.0.1', ''].includes(window.location.hostname) || window.location.protocol === 'file:';
     if (isLocalHost) return LOCAL_API;
