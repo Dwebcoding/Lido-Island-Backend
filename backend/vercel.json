@@ -1,13 +1,13 @@
 {
   "version": 2,
   "builds": [
-    { "src": "api/ping.js", "use": "@vercel/node" },
-    { "src": "api/payment/create-checkout-session.js", "use": "@vercel/node" },
+    { "src": "api/ping.mjs", "use": "@vercel/node" },
+    { "src": "api/payment/create-checkout-session.mjs", "use": "@vercel/node" },
     { "src": "api/server.js", "use": "@vercel/node" }
   ],
   "routes": [
-    { "src": "/api/ping", "methods": ["GET"], "dest": "/api/ping.js" },
-    { "src": "/api/payment/create-checkout-session", "methods": ["POST", "OPTIONS"], "dest": "/api/payment/create-checkout-session.js" },
+    { "src": "/api/ping", "methods": ["GET"], "dest": "/api/ping.mjs" },
+    { "src": "/api/payment/create-checkout-session", "methods": ["POST", "OPTIONS"], "dest": "/api/payment/create-checkout-session.mjs" },
     { "src": "/api/(.*)", "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], "dest": "/api/server.js" }
   ]
 }
