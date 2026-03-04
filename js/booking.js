@@ -30,18 +30,43 @@ const BOOKING_CONFIG = {
     STORAGE_KEY: 'isolaLido_bookings'
 };
 
-// Endpoint API
-// - default: produzione su backend Vercel
-// - override dominio con ?apiHost=tuo-backend.vercel.app
-const DEFAULT_PROD_API = 'https://backend-atrfva4ai-dwebcodings-projects-ab095673.vercel.app';
+// Endpoint API (ordine priorità):
+// 1) querystring ?apiHost=
+// 2) window.LIDO_API_BASE (config globale)
+// 3) <meta name="lido-api-base" content="...">
+// 4) default stabile produzione (consigliato dominio custom API)
+// 5) fallback legacy deployment URL (solo emergenza)
+const STABLE_PROD_API = 'https://api.isolalido.it';
+const LEGACY_PROD_FALLBACK_API = 'https://backend-atrfva4ai-dwebcodings-projects-ab095673.vercel.app';
 const LOCAL_API = 'http://localhost:3000';
-const params = new URLSearchParams(window.location.search);
-const apiHostOverride = params.get('apiHost');
-const isLocalHost = ['localhost', '127.0.0.1', ''].includes(window.location.hostname) || window.location.protocol === 'file:';
-const prodApi = apiHostOverride
-  ? (apiHostOverride.startsWith('http') ? apiHostOverride : `https://${apiHostOverride}`)
-  : DEFAULT_PROD_API;
-const API_BASE = isLocalHost ? LOCAL_API : prodApi;
+
+function normalizeApiBase(value) {
+    if (!value || typeof value !== 'string') return '';
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    return withProtocol.replace(/\/+$/, '');
+}
+
+function resolveApiBase() {
+    const params = new URLSearchParams(window.location.search);
+    const apiHostOverride = normalizeApiBase(params.get('apiHost'));
+    if (apiHostOverride) return apiHostOverride;
+
+    const fromWindow = normalizeApiBase(window.LIDO_API_BASE);
+    if (fromWindow) return fromWindow;
+
+    const fromMeta = normalizeApiBase(document.querySelector('meta[name="lido-api-base"]')?.content || '');
+    if (fromMeta) return fromMeta;
+
+    const isLocalHost = ['localhost', '127.0.0.1', ''].includes(window.location.hostname) || window.location.protocol === 'file:';
+    if (isLocalHost) return LOCAL_API;
+
+    // In produzione preferisce dominio API stabile. Se non configurato via DNS, usa fallback legacy.
+    return STABLE_PROD_API || LEGACY_PROD_FALLBACK_API;
+}
+
+const API_BASE = resolveApiBase();
 
 
 // ============ VARIABILI GLOBALI ============

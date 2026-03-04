@@ -5,15 +5,22 @@ import mailer from './services/mailer.js';
 
 const router = express.Router();
 
-// Preferisci le chiavi dal process.env in produzione
-const stripeSecret = process.env.STRIPE_SECRET_KEY || 'sk_test_xxx';
+// Chiave Stripe da env (senza fallback hardcoded)
+const stripeSecret = (process.env.STRIPE_SECRET_KEY || '').trim();
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET; // obbligatorio in produzione
-const isPlaceholderKey = !stripeSecret || stripeSecret.includes('sk_test_xxx');
+const isProduction = (process.env.VERCEL_ENV === 'production') || (process.env.NODE_ENV === 'production');
+const isMissingKey = !stripeSecret;
+const isTestKey = stripeSecret.startsWith('sk_test_');
+const isStripeDisabled = isMissingKey || (isProduction && isTestKey);
 
-// Se la chiave è mancante o placeholder, blocca il checkout con un messaggio chiaro
+// Se la chiave è mancante o test in produzione, blocca checkout/webhook con messaggio chiaro
 let stripe;
-if (isPlaceholderKey) {
-  console.warn('[Stripe] STRIPE_SECRET_KEY mancante o placeholder. Checkout disabilitato finché non configuri la chiave.');
+if (isStripeDisabled) {
+  if (isMissingKey) {
+    console.warn('[Stripe] STRIPE_SECRET_KEY mancante. Checkout disabilitato finché non configuri la chiave.');
+  } else if (isProduction && isTestKey) {
+    console.error('[Stripe] STRIPE_SECRET_KEY test rilevata in produzione. Checkout disabilitato.');
+  }
 } else {
   stripe = new Stripe(stripeSecret, { apiVersion: null });
   console.log('[Stripe] secret prefix', stripeSecret?.slice(0, 4));
@@ -36,6 +43,10 @@ router.post('/webhook', async (req, res) => {
     console.log('[Stripe Webhook] env endpointSecret present:', !!endpointSecret);
 
     if (whSecret) {
+      if (!stripe) {
+        console.error('[Stripe Webhook] Stripe non inizializzato: controlla STRIPE_SECRET_KEY.');
+        return res.status(503).send('Stripe not configured');
+      }
       // Verifica la firma del webhook
       event = stripe.webhooks.constructEvent(payload, sig, whSecret);
       console.log('[Stripe Webhook] constructEvent ok, type:', event?.type);
@@ -115,8 +126,11 @@ router.post('/webhook', async (req, res) => {
 router.post('/create-checkout-session', async (req, res) => {
   const { amount, email, description, metadata } = req.body || {};
   try {
-    if (isPlaceholderKey || !stripe) {
-      return res.status(503).json({ error: 'Pagamento disabilitato: configura STRIPE_SECRET_KEY nel file .env del backend.' });
+    if (isStripeDisabled || !stripe) {
+      if (isProduction && isTestKey) {
+        return res.status(503).json({ error: 'Pagamento disabilitato: chiave Stripe test rilevata in ambiente Production.' });
+      }
+      return res.status(503).json({ error: 'Pagamento disabilitato: configura STRIPE_SECRET_KEY nel backend.' });
     }
     const cents = Number.isFinite(Number(amount)) ? Math.round(Number(amount)) : null;
     if (!cents || cents <= 0) return res.status(400).json({ error: 'Importo non valido' });
