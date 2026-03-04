@@ -8,7 +8,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Sistema di Prenotazione - Isola Lido">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' http://localhost:3000 https://lido-island-production.up.railway.app https://backend-beige-nu-33.vercel.app https://*.vercel.app https://unpkg.com https://dwebcoding.github.io https://api.emailjs.com">
+    <meta name="lido-api-base" content="https://backend-atrfva4ai-dwebcodings-projects-ab095673.vercel.app">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' http://localhost:3000 https://api.isolalido.it https://lido-island-production.up.railway.app https://backend-beige-nu-33.vercel.app https://*.vercel.app https://unpkg.com https://dwebcoding.github.io https://api.emailjs.com">
     <title>Prenotazioni - Isola Lido</title>
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="../images/logo/tabs/Logo Lido Island no background copy.png">
@@ -191,9 +192,9 @@
                             
                             <!-- PULSANTE SUBMIT -->
                             
-                            <!-- <button type="submit" class="booking-submit" id="submitBooking">
+                            <button type="submit" class="booking-submit" id="submitBooking">
                                 <span class="material-symbols-rounded">check</span> Conferma Prenotazione
-                            </button> */-->
+                            </button> 
                             
                             
                             <p class="form-disclaimer">
@@ -234,11 +235,11 @@
                         <span class="material-symbols-rounded">volunteer_activism</span>
                         <div>
                             <p class="donation-card__eyebrow">Supporta Isola Lido</p>
-                            <h3 id="donationTitle">Donazioni digitali e test live</h3>
+                            <h3 id="donationTitle">Donazioni</h3>
                         </div>
                     </div>
                     <p class="donation-card__text">
-                        Vuoi contribuire al mantenimento dell'oasi? Puoi farlo con una donazione digitale: è semplice, veloce e sarebbe per noi un gesto di gradito.
+                        Vuoi contribuire al mantenimento dell'oasi? Puoi farlo con una donazione digitale: è semplice, veloce e sarebbe per noi un gesto gradito.
                     </p>
                     <form id="donationForm" class="donation-form" autocomplete="on">
                         <div class="form-group">
@@ -254,7 +255,7 @@
                                 autocomplete="off"
                                 required
                             >
-                            <span class="form-hint">Puoi donare qualsiasi cifra a partire da 1,00 € (perfetto per testare con 1 €).</span>
+                            <span class="form-hint">Puoi donare qualsiasi cifra a partire da 1,00 €.</span>
                         </div>
                         <div class="form-group">
                             <label for="donationEmail">Email *</label>
@@ -287,13 +288,11 @@
                                 autocomplete="off"
                             ></textarea>
                         </div>
-                        <p class="donation-form-note">Per un test live usa 1,00 €: il pagamento arriverà su Stripe, riceverai la conferma e noi verifichiamo webhook e mail prima di aprire ufficialmente.</p>
                         <button type="submit" class="primary-button donation-button">
                             <span class="material-symbols-rounded">payments</span>
                             <span class="donation-button__label">Procedi con la donazione digitale</span>
                         </button>
                     </form>
-                    <br>
                     <p class="donation-note">
                         Ogni donazione mantiene in piedi il lido e la squadra che lavora ogni giorno per garantirti sicurezza, comfort e divertimento.
                     </p>
