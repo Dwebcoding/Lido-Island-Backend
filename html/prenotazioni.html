@@ -76,14 +76,23 @@
                         <!-- TAVOLI -->
                         <div class="booking-card">
                             <h3><span class="material-symbols-rounded">table_restaurant</span> Tavoli (8 persone)</h3>
-                            <p class="booking-price">€ 8,00 per tavolo</p>
-                            <div class="booking-quantity">
-                                <button type="button" class="qty-btn" id="tableMinus">−</button>
-                                <span id="tableQty" class="qty-span">0</span>
-                                <button type="button" class="qty-btn" id="tablePlus">+</button>
+                            <p class="booking-price">&euro; 8,00 per tavolo</p>
+                            <div class="form-group">
+                                <label for="tablePickerButton">Scegli il numero tavolo</label>
+                                <div class="table-picker" id="tablePicker">
+                                    <button type="button" id="tablePickerButton" class="table-picker-trigger" aria-expanded="false">
+                                        <span class="table-picker-trigger-text">Nessun tavolo selezionato</span>
+                                        <span class="material-symbols-rounded" aria-hidden="true">expand_more</span>
+                                    </button>
+                                    <div class="table-picker-panel hidden" id="tablePickerPanel">
+                                        <div class="table-picker-sections" id="tablePickerSections"></div>
+                                    </div>
+                                    <input type="hidden" id="tableNumberSelect" value="">
+                                </div>
                             </div>
-                            <p class="availability" id="tableAvailability">Disponibili: 110 tavoli</p>
-                            <p class="booking-subtotal" id="tableSubtotal">Subtotale: € 0,00</p>
+                            <p class="availability" id="tableAvailability">Disponibili: 121 tavoli</p>
+                            <p class="booking-subtotal" id="tableSubtotal">Subtotale: &euro; 0,00</p>
+                            <p class="booking-hint" id="selectedTableLabel">Tavolo selezionato: nessuno</p>
                             <p class="availability-timestamp" id="availabilityTimestamp" style="font-size:0.9em;color:#888;"></p>
                             <div id="bookingWarningBanner" class="booking-warning-banner" style="display:none;margin-top:10px;padding:8px;background:#ffe0e0;color:#b00;font-weight:bold;border-radius:6px;"></div>
                         </div>
@@ -192,9 +201,9 @@
                             
                             <!-- PULSANTE SUBMIT -->
                             
-                            <button type="submit" class="booking-submit" id="submitBooking">
+                          <!--  <button type="submit" class="booking-submit" id="submitBooking">
                                 <span class="material-symbols-rounded">check</span> Conferma Prenotazione
-                            </button> 
+                            </button> -->
                             
                             
                             <p class="form-disclaimer">
@@ -300,7 +309,6 @@
             </div>
         </section>
         
-        
         <!-- SEZIONE INFO PRENOTAZIONI -->
         <section class="booking-info-section">
             <div class="container">
@@ -309,7 +317,7 @@
                     <div class="info-card">
                         <h3>🍽️ Tavoli</h3>
                         <p><strong>Capacità:</strong> 8 persone per tavolo</p>
-                        <p><strong>Disponibili:</strong> 110 tavoli</p>
+                        <p><strong>Disponibili:</strong> 121 tavoli</p>
                         <p><strong>Prezzo:</strong> €8,00 per tavolo</p>
                     </div>
                     <div class="info-card">
@@ -383,3 +391,5 @@
     </script>
 </body>
 </html>
+
+

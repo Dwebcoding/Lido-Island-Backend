@@ -19,7 +19,7 @@ const EMAILJS_CONFIG = {
 
 const BOOKING_CONFIG = {
     TABLES: {
-        total: 110,
+        total: 121,
         price: 8.00,
         capacity: 8
     },
@@ -82,15 +82,27 @@ const API_BASE = resolveApiBase();
 let currentBooking = {
     date: '',
     tables: 0,
+    tableNumbers: [],
     chairs: 0,
     umbrellas: 0
 };
 
 // Variabili globali per i valori reali disponibili
 
-let tavoliDisponibiliIniziali = 110;
+let tavoliDisponibiliIniziali = 121;
 let sdraioDisponibiliIniziali = 65;
 let ombrelloniDisponibiliIniziali = 65;
+let tavoliOccupati = new Set();
+
+const TABLE_ZONES = [
+    { label: 'Zona 1 - Tavoli coperti lato strada (1-25)', start: 1, end: 25 },
+    { label: 'Zona 2 - Esagono (26-36)', start: 26, end: 36 },
+    { label: 'Zona 3 - Tavoli coperti lato strada (37-45)', start: 37, end: 45 },
+    { label: 'Zona 4 - Area cani (46-66)', start: 46, end: 66 },
+    { label: 'Zona 5 - Tavoli coperti lato fiume (67-100)', start: 67, end: 100 },
+    { label: 'Zona 6 - Tavoli scoperti (101-110)', start: 101, end: 110 },
+    { label: 'Zona 7 - Tavoli cemento centro parco (111-121)', start: 111, end: 121 }
+];
 
 function aggiornaContatoreTavoliLocale() {
     const availElem = document.getElementById('tableAvailability');
@@ -113,6 +125,56 @@ function aggiornaContatoreOmbrelloniLocale() {
     if (availElem) {
         const disponibili = ombrelloniDisponibiliIniziali - (currentBooking.umbrellas || 0);
         availElem.textContent = `Disponibili: ${disponibili} ombrelloni`;
+    }
+}
+
+function renderTableNumberOptions() {
+    const select = document.getElementById('tableNumberSelect');
+    const container = document.getElementById('tablePickerSections');
+    if (!select || !container) return;
+
+    const selected = Number(currentBooking.tableNumbers[0] || 0);
+    select.value = selected ? String(selected) : '';
+
+    const sectionsHtml = TABLE_ZONES.map((zone, idx) => {
+        let buttons = '';
+        for (let n = zone.start; n <= zone.end; n++) {
+            const occupied = tavoliOccupati.has(n);
+            const isSelected = selected === n;
+            const classes = [
+                'table-number-btn',
+                occupied ? 'occupied' : '',
+                isSelected ? 'selected' : ''
+            ].filter(Boolean).join(' ');
+
+            buttons += `<button type="button" class="${classes}" data-table-number="${n}" ${occupied ? 'disabled' : ''}>${n}</button>`;
+        }
+
+        return `
+            <section class="table-zone ${idx === 0 ? 'open' : ''}">
+                <button type="button" class="table-zone-toggle" data-zone-toggle>
+                    <span>${zone.label}</span>
+                    <span class="material-symbols-rounded" aria-hidden="true">${idx === 0 ? 'expand_less' : 'expand_more'}</span>
+                </button>
+                <div class="table-zone-list">
+                    ${buttons}
+                </div>
+            </section>
+        `;
+    }).join('');
+
+    container.innerHTML = sectionsHtml;
+}
+
+function updateSelectedTableLabel() {
+    const label = document.getElementById('selectedTableLabel');
+    const trigger = document.getElementById('tablePickerButton');
+    const triggerText = trigger?.querySelector('.table-picker-trigger-text');
+    if (!label) return;
+    const selected = currentBooking.tableNumbers[0];
+    label.textContent = selected ? `Tavolo selezionato: ${selected}` : 'Tavolo selezionato: nessuno';
+    if (triggerText) {
+        triggerText.textContent = selected ? `Tavolo ${selected}` : 'Nessun tavolo selezionato';
     }
 }
 
@@ -175,92 +237,86 @@ function isDateAllowed(dateObj) {
  * Inizializza il sistema di prenotazione
  */
 function initBookingSystem() {
-    // Ombrelloni: listener per + e -
     const umbrellaPlus = document.getElementById('umbrellaPlus');
     const umbrellaMinus = document.getElementById('umbrellaMinus');
     if (umbrellaPlus && umbrellaMinus) {
-        umbrellaPlus.addEventListener('click', () => {
-            console.log('[Booking] Click umbrellaPlus');
-            incrementUmbrella();
-        });
-        umbrellaMinus.addEventListener('click', () => {
-            console.log('[Booking] Click umbrellaMinus');
-            decrementUmbrella();
-        });
+        umbrellaPlus.addEventListener('click', () => incrementUmbrella());
+        umbrellaMinus.addEventListener('click', () => decrementUmbrella());
     }
-        // Impedisci modifica manuale degli input quantità
-        document.getElementById('tableQty')?.addEventListener('keydown', e => e.preventDefault());
-        document.getElementById('chairQty')?.addEventListener('keydown', e => e.preventDefault());
-    console.log('[Booking System] Inizio inizializzazione...');
-    
-    // EmailJS rimosso: la logica email è ora gestita solo dal backend
-    
-    // Imposta la data minima (domani)
+
+    document.getElementById('chairQty')?.addEventListener('keydown', (e) => e.preventDefault());
     setMinDate();
-    
-    // Verifica che i pulsanti esistano
-    const tablePlus = document.getElementById('tablePlus');
-    const tableMinus = document.getElementById('tableMinus');
+
+    const tableSelect = document.getElementById('tableNumberSelect');
+    const picker = document.getElementById('tablePicker');
+    const pickerButton = document.getElementById('tablePickerButton');
+    const pickerPanel = document.getElementById('tablePickerPanel');
+    const pickerSections = document.getElementById('tablePickerSections');
     const chairPlus = document.getElementById('chairPlus');
     const chairMinus = document.getElementById('chairMinus');
-    
-    console.log('[Booking System] Pulsanti trovati:', {
-        tablePlus: !!tablePlus,
-        tableMinus: !!tableMinus,
-        chairPlus: !!chairPlus,
-        chairMinus: !!chairMinus
-    });
-    
-    // Event listeners per quantità
-    tablePlus?.addEventListener('click', () => {
-        console.log('[Booking] Click tablePlus');
-        incrementTable();
-        aggiornaContatoreTavoliLocale();
-    });
-    tableMinus?.addEventListener('click', () => {
-        console.log('[Booking] Click tableMinus');
-        decrementTable();
-        aggiornaContatoreTavoliLocale();
+
+    pickerButton?.addEventListener('click', () => {
+        if (!pickerPanel || !picker) return;
+        const isOpen = !pickerPanel.classList.contains('hidden');
+        pickerPanel.classList.toggle('hidden', isOpen);
+        picker.classList.toggle('is-open', !isOpen);
+        pickerButton.setAttribute('aria-expanded', String(!isOpen));
     });
 
-// Aggiorna il contatore localmente in base ai tavoli selezionati
-function aggiornaContatoreTavoliLocale() {
-    const availElem = document.getElementById('tableAvailability');
-    if (availElem) {
-        const disponibili = tavoliDisponibiliIniziali - currentBooking.tables;
-        availElem.textContent = `Disponibili: ${disponibili} tavoli`;
-    }
-}
+    pickerSections?.addEventListener('click', (e) => {
+        const zoneToggle = e.target.closest('[data-zone-toggle]');
+        if (zoneToggle) {
+            const zone = zoneToggle.closest('.table-zone');
+            const icon = zoneToggle.querySelector('.material-symbols-rounded');
+            const isOpen = zone.classList.contains('open');
+            zone.classList.toggle('open', !isOpen);
+            if (icon) icon.textContent = isOpen ? 'expand_more' : 'expand_less';
+            return;
+        }
 
-function aggiornaContatoreSdraioLocale() {
-    const availElem = document.getElementById('chairAvailability');
-    if (availElem) {
-        const disponibili = sdraioDisponibiliIniziali - currentBooking.chairs;
-        availElem.textContent = `Disponibili: ${disponibili} sdraio`;
-    }
-}
+        const tableBtn = e.target.closest('[data-table-number]');
+        if (!tableBtn || tableBtn.disabled) return;
+        const selected = Number(tableBtn.getAttribute('data-table-number') || 0);
+        if (!Number.isInteger(selected) || selected <= 0) return;
+
+        currentBooking.tableNumbers = [selected];
+        currentBooking.tables = 1;
+        if (tableSelect) tableSelect.value = String(selected);
+        updateSelectedTableLabel();
+        renderTableNumberOptions();
+        updateDisplay();
+        aggiornaContatoreTavoliLocale();
+        if (pickerPanel) pickerPanel.classList.add('hidden');
+        picker?.classList.remove('is-open');
+        pickerButton?.setAttribute('aria-expanded', 'false');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!picker || !pickerPanel || !pickerButton) return;
+        if (picker.contains(e.target)) return;
+        pickerPanel.classList.add('hidden');
+        picker.classList.remove('is-open');
+        pickerButton.setAttribute('aria-expanded', 'false');
+    });
+
     chairPlus?.addEventListener('click', () => {
-        console.log('[Booking] Click chairPlus');
         incrementChair();
         aggiornaContatoreSdraioLocale();
     });
     chairMinus?.addEventListener('click', () => {
-        console.log('[Booking] Click chairMinus');
         decrementChair();
         aggiornaContatoreSdraioLocale();
     });
-    
-    // Event listener per data
+
     const dateInput = document.getElementById('bookingDate');
     if (dateInput) {
-        // Initialize flatpickr if available, disabling blocked dates
         if (typeof flatpickr !== 'undefined') {
             flatpickr(dateInput, {
                 locale: 'it',
                 dateFormat: 'Y-m-d',
                 minDate: new Date(new Date().getTime() + 24 * 60 * 60 * 1000),
                 disable: [function(date) { return !isDateAllowed(date); }],
-                onChange: function(selectedDates, dateStr) {
+                onChange: function(_selectedDates, dateStr) {
                     currentBooking.date = dateStr;
                     updateAvailability();
                 }
@@ -272,96 +328,13 @@ function aggiornaContatoreSdraioLocale() {
             });
         }
     }
-}
 
-// ============ GESTIONE QUANTITÀ SDRAIO ============
-// ============ GESTIONE QUANTITÀ OMBRELLONI ============
-function incrementUmbrella() {
-    if (!currentBooking.umbrellas) currentBooking.umbrellas = 0;
-    currentBooking.umbrellas++;
-    aggiornaContatoreOmbrelloniLocale();
-    updateDisplay();
-}
+    renderTableNumberOptions();
+    updateSelectedTableLabel();
 
-function decrementUmbrella() {
-    if (!currentBooking.umbrellas) currentBooking.umbrellas = 0;
-    if (currentBooking.umbrellas > 0) {
-        currentBooking.umbrellas--;
-        aggiornaContatoreOmbrelloniLocale();
-        updateDisplay();
-    }
+    document.getElementById('bookingForm')?.addEventListener('submit', handleBookingSubmit);
+    document.getElementById('donationForm')?.addEventListener('submit', handleDonationSubmit);
 }
-
-/**
- * Aumenta la quantità di sdraio
- */
-/**
- * Aumenta la quantità di tavoli
- */
-function incrementTable() {
-    console.log('[Booking] incrementTable - Prima:', {
-        currentTables: currentBooking.tables,
-        availableTables: getAvailableTables()
-    });
-    const availableTables = getAvailableTables();
-        currentBooking.tables++;
-        updateDisplay();
-}
-
-/**
- * Diminuisce la quantità di tavoli
- */
-function decrementTable() {
-    console.log('[Booking] decrementTable - Prima:', currentBooking.tables);
-    if (currentBooking.tables > 0) {
-        currentBooking.tables--;
-        updateDisplay();
-        console.log('[Booking] decrementTable - Dopo:', currentBooking.tables);
-    }
-}
-function incrementChair() {
-    console.log('[Booking] incrementChair - Prima:', {
-        currentChairs: currentBooking.chairs,
-        availableChairs: getAvailableChairs()
-    });
-    
-    const availableChairs = getAvailableChairs();
-        currentBooking.chairs++;
-        updateDisplay();
-}
-
-/**
- * Diminuisce la quantità di sdraio
- */
-function decrementChair() {
-    console.log('[Booking] decrementChair - Prima:', currentBooking.chairs);
-    if (currentBooking.chairs > 0) {
-        currentBooking.chairs--;
-        updateDisplay();
-        console.log('[Booking] decrementChair - Dopo:', currentBooking.chairs);
-    }
-}
-
-// ============ CALCOLO DISPONIBILITÀ ============
-
-/**
- * Ottiene i tavoli disponibili per la data selezionata
- * @returns {number} Numero di tavoli disponibili
- */
-function getAvailableTables() {
-    const booked = getBookedTablesByDate(currentBooking.date);
-    return Math.max(0, BOOKING_CONFIG.TABLES.total - booked);
-}
-
-/**
- * Ottiene le sdraio disponibili per la data selezionata
- * @returns {number} Numero di sdraio disponibili
- */
-function getAvailableChairs() {
-    const booked = getBookedChairsByDate(currentBooking.date);
-    return Math.max(0, BOOKING_CONFIG.CHAIRS.total - booked);
-}
-
 /**
  * Ottiene i tavoli prenotati per una data specifica
  * @param {string} date - Data in formato YYYY-MM-DD
@@ -393,7 +366,6 @@ function getBookedChairsByDate(date) {
  */
 function updateDisplay() {
     // Aggiorna quantità visualizzata
-    document.getElementById('tableQty').textContent = currentBooking.tables;
     document.getElementById('chairQty').textContent = currentBooking.chairs;
     if (document.getElementById('umbrellaQty')) {
         document.getElementById('umbrellaQty').textContent = currentBooking.umbrellas || 0;
@@ -438,6 +410,7 @@ function updateDisplay() {
     }
     document.getElementById('summaryTotal').textContent = 
         `€ ${total.toFixed(2)}`;
+    updateSelectedTableLabel();
 }
 
 /**
@@ -448,12 +421,13 @@ function updateAvailability() {
     if (!date) return;
     const endpoints = [
         fetch(`${API_BASE}/api/booking/tavoli-disponibili?date=${encodeURIComponent(date)}`).then(r => r.json()),
+        fetch(`${API_BASE}/api/booking/tavoli-occupati?date=${encodeURIComponent(date)}`).then(r => r.json()),
         fetch(`${API_BASE}/api/booking/sdraio-disponibili?date=${encodeURIComponent(date)}`).then(r => r.json()),
         fetch(`${API_BASE}/api/booking/ombrelloni-disponibili?date=${encodeURIComponent(date)}`).then(r => r.json())
     ];
 
     Promise.all(endpoints)
-        .then(([tavoliData, sdraioData, ombrelloniData]) => {
+        .then(([tavoliData, tavoliOccupatiData, sdraioData, ombrelloniData]) => {
             const banner = document.getElementById('bookingWarningBanner');
             const submitBtn = document.getElementById('submitBooking');
 
@@ -471,10 +445,17 @@ function updateAvailability() {
                 if (submitBtn) submitBtn.disabled = false;
 
                 tavoliDisponibiliIniziali = Number.isFinite(tavoliData.tavoliDisponibili) ? tavoliData.tavoliDisponibili : 0;
+                tavoliOccupati = new Set((tavoliOccupatiData?.tavoliOccupati || []).map((n) => Number(n)));
                 sdraioDisponibiliIniziali = Number.isFinite(sdraioData.sdraioDisponibili) ? sdraioData.sdraioDisponibili : 0;
                 ombrelloniDisponibiliIniziali = Number.isFinite(ombrelloniData.ombrelloniDisponibili) ? ombrelloniData.ombrelloniDisponibili : 0;
             }
 
+            const selected = currentBooking.tableNumbers[0];
+            if (selected && tavoliOccupati.has(Number(selected))) {
+                currentBooking.tableNumbers = [];
+                currentBooking.tables = 0;
+            }
+            renderTableNumberOptions();
             aggiornaContatoreTavoliLocale();
             aggiornaContatoreSdraioLocale();
             aggiornaContatoreOmbrelloniLocale();
@@ -491,7 +472,7 @@ function updateAvailability() {
     const banner = document.getElementById('bookingWarningBanner');
     if (banner) {
         banner.style.display = 'none';
-        if (110 - currentBooking.tables <= 10) {
+        if (BOOKING_CONFIG.TABLES.total - currentBooking.tables <= 10) {
             banner.textContent = 'Attenzione: rimangono meno di 10 tavoli disponibili!';
             banner.style.display = 'block';
         } else if (65 - currentBooking.chairs <= 10) {
@@ -617,6 +598,7 @@ function handleBookingSubmit(e) {
         const booking = {
             date: currentBooking.date,
             tables: currentBooking.tables,
+            tableNumbers: [...(currentBooking.tableNumbers || [])],
             chairs: currentBooking.chairs,
             umbrellas: currentBooking.umbrellas,
             name: document.querySelector('input[name="name"]').value,
@@ -832,6 +814,7 @@ function resetBookingForm() {
     currentBooking = {
         date: new Date(new Date().getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         tables: 0,
+        tableNumbers: [],
         chairs: 0
     };
     
@@ -928,3 +911,5 @@ if (document.readyState === 'loading') {
 logBooking('Sistema di prenotazione inizializzato');
 logBooking('Tavoli disponibili: ' + BOOKING_CONFIG.TABLES.total);
 logBooking('Sdraio disponibili: ' + BOOKING_CONFIG.CHAIRS.total);
+
+

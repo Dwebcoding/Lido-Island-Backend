@@ -1,6 +1,7 @@
 import express from 'express';
 import Stripe from 'stripe';
 import Booking from './models/booking.js';
+import Donation from './models/donation.js';
 import mailer from './services/mailer.js';
 
 const router = express.Router();
@@ -96,24 +97,92 @@ router.post('/webhook', async (req, res) => {
       }
 
       let bookingRecord = null;
+      let createdDonation = false;
+      let bookingPayloadForMail = null;
       try {
-        bookingRecord = await Booking.create({
-          ...bookingData,
-          email: session.customer_email,
-          paymentId: session.id,
-          amount: session.amount_total,
-          status: 'active'
-        });
+        const metadata = session?.metadata || {};
+        const incomingTableNumbers = Array.isArray(bookingData.tableNumbers)
+          ? bookingData.tableNumbers.map((n) => Number(n)).filter((n) => Number.isInteger(n) && n >= 1 && n <= 121)
+          : [];
+        const normalizedBooking = {
+          bookingId: bookingData.id || bookingData.bookingId || `ISOLA-${Date.now()}-${String(session.id || '').slice(-8).toUpperCase()}`,
+          date: bookingData.date || '',
+          name: bookingData.name || '',
+          phone: bookingData.phone || '',
+          notes: bookingData.notes || '',
+          tables: incomingTableNumbers.length > 0
+            ? incomingTableNumbers.length
+            : (Number.isFinite(Number(bookingData.tables)) ? Number(bookingData.tables) : 0),
+          tableNumbers: incomingTableNumbers,
+          chairs: Number.isFinite(Number(bookingData.chairs)) ? Number(bookingData.chairs) : 0,
+          umbrellas: Number.isFinite(Number(bookingData.umbrellas)) ? Number(bookingData.umbrellas) : 0
+        };
+
+        const hasBookingPayload = Boolean(normalizedBooking.date) && (normalizedBooking.tables + normalizedBooking.chairs + normalizedBooking.umbrellas) > 0;
+        if (hasBookingPayload) {
+          bookingRecord = await Booking.create({
+            ...normalizedBooking,
+            email: session.customer_email,
+            paymentId: session.id,
+            amount: session.amount_total,
+            paymentStatus: session.payment_status || 'paid',
+            status: 'active'
+          });
+          bookingPayloadForMail = {
+            ...normalizedBooking,
+            id: bookingRecord?.bookingId || bookingRecord?._id || normalizedBooking.bookingId,
+            booking_id: bookingRecord?.bookingId || bookingRecord?._id || normalizedBooking.bookingId,
+            email: session.customer_email || '',
+            paymentId: session.id || '',
+            amount: session.amount_total || 0
+          };
+        } else {
+          await Donation.create({
+            donorName: metadata.donation_name || '',
+            donorEmail: session.customer_email || '',
+            message: metadata.donation_message || '',
+            amount: session.amount_total || 0,
+            paymentId: session.id || '',
+            paymentStatus: session.payment_status || 'paid',
+            donationType: metadata.donation_type || 'generic',
+            status: 'active'
+          });
+          createdDonation = true;
+          console.log('[Stripe Webhook] donazione salvata:', session.customer_email);
+        }
       } catch (dbErr) {
-        console.warn('[Stripe Webhook] Booking save failed (continuo con le email):', dbErr.message);
+        console.warn('[Stripe Webhook] save failed (continuo con le email):', dbErr.message);
       }
 
       try {
-        await mailer.sendOwnerNotification({ booking: { ...bookingData, email: session.customer_email }, amount: session.amount_total });
+        if (!createdDonation) {
+          const bookingForMail = bookingPayloadForMail || { ...bookingData, email: session.customer_email };
+          const ownerSent = await mailer.sendOwnerNotification({
+            booking: bookingForMail,
+            amount: session.amount_total,
+            notifyCustomer: false
+          });
+          console.log('[Stripe Webhook] owner email sent:', ownerSent);
+
+          if (session.customer_email && session.customer_email.includes('@')) {
+            const customerSent = await mailer.sendCustomerConfirmation({
+              to: session.customer_email,
+              booking: bookingForMail,
+              amount: session.amount_total
+            });
+            console.log('[Stripe Webhook] customer email sent:', customerSent, 'to:', session.customer_email);
+          } else {
+            console.warn('[Stripe Webhook] customer email missing/invalid, skip confirmation');
+          }
+        }
       } catch (mailErr) {
         console.error('[Stripe Webhook] sendOwnerNotification failed:', mailErr);
       }
-      console.log('Prenotazione salvata e notificato il proprietario:', session.customer_email);
+      if (createdDonation) {
+        console.log('Donazione salvata:', session.customer_email);
+      } else {
+        console.log('Prenotazione salvata e notificato il proprietario:', session.customer_email);
+      }
     }
   } catch (err) {
     console.error('[Stripe Webhook] errore interno gestionale:', err);
