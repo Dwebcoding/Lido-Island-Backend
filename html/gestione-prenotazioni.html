@@ -1,0 +1,146 @@
+﻿<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Gestione privata prenotazioni - Isola Lido">
+    <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
+    <meta name="lido-api-base" content="https://backend-two-phi-89.vercel.app">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' http://localhost:3000 http://127.0.0.1:3000 ws://127.0.0.1:5500 ws://localhost:5500 https://api.isolalido.it https://*.vercel.app; img-src 'self' data: https:">
+    <title>Gestione Prenotazioni e Donazioni - Isola Lido</title>
+    <link rel="icon" type="image/png" href="../images/logo/tabs/Logo Lido Island no background copy.png">
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .table-message { margin: 0 0 10px; font-weight: 600; color: #2a3f56; }
+        .table-wrap { overflow: auto; border: 1px solid #dbe7f3; border-radius: 12px; }
+        .admin-table { width: 100%; border-collapse: collapse; min-width: 1100px; font-size: 14px; }
+        .admin-table th { text-align: left; padding: 10px; background: #f3f8fd; color: #183a5a; border-bottom: 1px solid #dbe7f3; white-space: nowrap; }
+        .admin-table td { padding: 10px; border-bottom: 1px solid #eef3f8; vertical-align: top; }
+        .admin-table tr:hover td { background: #fbfdff; }
+        .admin-table td.center { text-align: center; }
+        .admin-table td.nowrap { white-space: nowrap; }
+        .status-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; text-transform: lowercase; }
+        .status-badge--success { background: #e9f9ee; color: #17683a; }
+        .status-badge--info { background: #e8f1ff; color: #1d4f91; }
+        .status-badge--warn { background: #fff6e6; color: #8a5a00; }
+        .status-badge--danger { background: #ffe8e8; color: #9d2020; }
+        .status-badge--neutral { background: #eef2f7; color: #3f4d5d; }
+        .id-pill { font-family: Consolas, monospace; font-size: 12px; padding: 2px 6px; border-radius: 6px; background: #f4f6f8; color: #34495e; }
+        .muted { color: #7a8a9a; }
+        .admin-actions { display: flex; gap: 8px; align-items: end; grid-column: 1 / -1; }
+    </style>
+</head>
+<body>
+    <main>
+        <section class="booking-section" aria-labelledby="bookingAdminTitle">
+            <div class="container">
+                <h1 class="section-title" id="bookingAdminTitle">Gestione Prenotazioni e Donazioni (Privata)</h1>
+                <p style="margin-bottom: 16px;">Pagina riservata al proprietario. Inserisci la chiave admin per visualizzare i dati.</p>
+
+                <div class="booking-card" style="margin-bottom:16px;">
+                    <form id="bookingAdminFilters" class="booking-form" autocomplete="off" style="display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items:end;">
+                        <div class="form-group">
+                            <label for="adminKey">Chiave admin</label>
+                            <input type="password" id="adminKey" placeholder="BOOKING_ADMIN_KEY" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="adminDate">Data</label>
+                            <input type="date" id="adminDate" name="date" placeholder="gg/mm/aaaa">
+                        </div>
+                        <div class="form-group">
+                            <label for="adminStatus">Stato prenotazione</label>
+                            <select id="adminStatus" name="status">
+                                <option value="">Tutti</option>
+                                <option value="active">Attive</option>
+                                <option value="cancelled">Cancellate</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="adminSort">Ordinamento</label>
+                            <select id="adminSort" name="sortBy">
+                                <option value="newest">Piu recenti prima</option>
+                                <option value="oldest">Piu vecchie prima</option>
+                                <option value="event_asc">Data prenotazione crescente</option>
+                                <option value="event_desc">Data prenotazione decrescente</option>
+                                <option value="amount_desc">Importo alto-basso</option>
+                                <option value="amount_asc">Importo basso-alto</option>
+                            </select>
+                        </div>
+                        <div class="admin-actions">
+                            <button type="button" class="primary-button" id="syncStripeData">Sincronizza da Stripe</button>
+                            <button type="button" class="secondary-button" id="refreshBookingList">Aggiorna</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="booking-card" style="margin-bottom:16px;">
+                    <div class="summary-row"><span>Ambito riepilogo:</span> <strong id="statsScope">Totale generale</strong></div>
+                    <div class="summary-row"><span>Prenotazioni:</span> <strong id="statsBookings">-</strong></div>
+                    <div class="summary-row"><span>Tavoli prenotati:</span> <strong id="statsTables">-</strong></div>
+                    <div class="summary-row"><span>Sdraio prenotate:</span> <strong id="statsChairs">-</strong></div>
+                    <div class="summary-row"><span>Ombrelloni prenotati:</span> <strong id="statsUmbrellas">-</strong></div>
+                    <div class="summary-row"><span>Totale incassi:</span> <strong id="statsAmount">-</strong></div>
+                </div>
+
+                <div class="booking-card">
+                    <h2 style="margin-bottom: 12px;">Prenotazioni</h2>
+                    <p id="bookingListMessage">Inserisci la chiave e premi "Carica lista".</p>
+                    <div class="table-wrap">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Nome</th>
+                                    <th>Email</th>
+                                    <th>Telefono</th>
+                                    <th>Tavoli</th>
+                                    <th>Sdraio</th>
+                                    <th>Ombrelloni</th>
+                                    <th>Importo</th>
+                                    <th>Pagamento</th>
+                                    <th>Stato</th>
+                                    <th>Booking ID</th>
+                                    <th>Payment ID</th>
+                                    <th>Note</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bookingListRows"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="booking-card" style="margin-top:20px; margin-bottom:16px;">
+                    <h2 style="margin-bottom: 12px;">Donazioni</h2>
+                    <div class="summary-row"><span>Numero donazioni:</span> <strong id="donationCount">-</strong></div>
+                    <div class="summary-row"><span>Totale donazioni:</span> <strong id="donationAmount">-</strong></div>
+                </div>
+
+                <div class="booking-card">
+                    <p id="donationListMessage">Le donazioni verranno caricate insieme alle prenotazioni.</p>
+                    <div class="table-wrap">
+                        <table class="admin-table" style="min-width:1000px;">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Nome</th>
+                                    <th>Email</th>
+                                    <th>Importo</th>
+                                    <th>Pagamento</th>
+                                    <th>Tipo</th>
+                                    <th>Payment ID</th>
+                                    <th>Messaggio</th>
+                                </tr>
+                            </thead>
+                            <tbody id="donationListRows"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="../js/booking-admin.js"></script>
+</body>
+</html>
+
