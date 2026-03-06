@@ -14,15 +14,7 @@ function toInt(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function requireAdminKey(req, res, next) {
-  const configuredKey = (process.env.BOOKING_ADMIN_KEY || '').trim();
-  if (!configuredKey) return next();
 
-  const providedKey = String(req.headers['x-admin-key'] || req.query.key || '').trim();
-  if (providedKey && providedKey === configuredKey) return next();
-
-  return res.status(401).json({ error: 'Non autorizzato. Fornisci la chiave admin.' });
-}
 
 function parseBookingMetadata(rawBooking) {
   if (typeof rawBooking !== 'string') return {};
@@ -88,7 +80,7 @@ router.patch('/cancella', async (req, res) => {
 });
 
 // Lista prenotazioni per gestionale
-router.get('/lista', requireAdminKey, async (req, res) => {
+router.get('/lista', async (req, res) => {
   try {
     const date = String(req.query.date || '').trim();
     const status = String(req.query.status || '').trim();
@@ -135,7 +127,7 @@ router.get('/lista', requireAdminKey, async (req, res) => {
 });
 
 // Riepilogo quantitativi prenotati per data
-router.get('/stats', requireAdminKey, async (req, res) => {
+router.get('/stats', async (req, res) => {
   try {
     const date = String(req.query.date || '').trim();
     const match = {
@@ -183,7 +175,7 @@ router.get('/stats', requireAdminKey, async (req, res) => {
 });
 
 // Lista donazioni per gestionale
-router.get('/donazioni', requireAdminKey, async (req, res) => {
+router.get('/donazioni', async (req, res) => {
   try {
     const date = String(req.query.date || '').trim();
     const limit = Math.min(Math.max(toInt(req.query.limit, 100), 1), 500);
@@ -217,7 +209,7 @@ router.get('/donazioni', requireAdminKey, async (req, res) => {
 });
 
 // Riepilogo donazioni
-router.get('/donazioni-stats', requireAdminKey, async (req, res) => {
+router.get('/donazioni-stats', async (req, res) => {
   try {
     const date = String(req.query.date || '').trim();
     const match = date
@@ -246,7 +238,7 @@ router.get('/donazioni-stats', requireAdminKey, async (req, res) => {
 });
 
 // Sync forzato da Stripe -> DB (prenotazioni + donazioni)
-router.post('/sync-stripe', requireAdminKey, async (req, res) => {
+router.post('/sync-stripe', async (req, res) => {
   try {
     const stripeSecret = (process.env.STRIPE_SECRET_KEY || '').trim();
     if (!stripeSecret) return res.status(503).json({ error: 'STRIPE_SECRET_KEY mancante' });
@@ -261,6 +253,7 @@ router.post('/sync-stripe', requireAdminKey, async (req, res) => {
     let bookingsUpserted = 0;
     let donationsUpserted = 0;
     let skipped = 0;
+    let conflicts = 0;
 
     for (const session of sessions.data || []) {
       const paymentStatus = String(session?.payment_status || '').toLowerCase();
@@ -296,6 +289,20 @@ router.post('/sync-stripe', requireAdminKey, async (req, res) => {
           paidAt
         };
 
+        if (incomingTableNumbers.length > 0 && payload.date) {
+          const conflict = await Booking.findOne({
+            status: 'active',
+            date: payload.date,
+            paymentId: { $ne: payload.paymentId },
+            tableNumbers: { $in: incomingTableNumbers }
+          }).lean();
+          if (conflict) {
+            conflicts++;
+            skipped++;
+            continue;
+          }
+        }
+
         await Booking.findOneAndUpdate(
           { paymentId: payload.paymentId },
           { $set: payload },
@@ -330,6 +337,7 @@ router.post('/sync-stripe', requireAdminKey, async (req, res) => {
       totalSessionsRead: sessions.data?.length || 0,
       bookingsUpserted,
       donationsUpserted,
+      conflicts,
       skipped
     });
   } catch (error) {
