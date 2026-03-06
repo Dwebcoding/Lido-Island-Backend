@@ -1,7 +1,6 @@
 /* ============================================
    ISOLA LIDO - COMPONENTI CONDIVISI
    Header e Footer dinamici per tutte le pagine
-   Author: Web Developer Professionista
    ============================================ */
 
 /**
@@ -77,17 +76,21 @@ function renderFooter() {
 
                     <div class="footer-contact-info">
                         <p>
-                            <strong>📍 Indirizzo:</strong><br>
+                            <strong>Indirizzo:</strong><br>
                             Via Rivolta, 20062<br>
                             Cassano d'Adda (MI) - Italia
                         </p>
                         <p>
-                            <strong>📞 Telefono:</strong><br>
+                            <strong>Telefono:</strong><br>
                             <a href="tel:333-499-3469">333-499-3469</a>
                         </p>
                         <p>
-                            <strong>📧 Email:</strong><br>
-                            <a href="mailto:postamaster@isolalido.it">postamaster@isolalido.it</a>
+                            <strong>Email:</strong><br>
+                            <a href="mailto:info@isolalido.it">info@isolalido.it</a>
+                        </p>
+                        <p>
+                            <strong>P. IVA:</strong><br>
+                            10729470152
                         </p>
                     </div>
                 </div>
@@ -135,7 +138,7 @@ function renderFooter() {
                 <div class="footer-section">
                     <h4>Orari di Apertura</h4>
                     <ul class="footer-hours">
-                        <li><strong>Lun-Dom:</strong> 9:30 - 18:00</li>
+                        <li><strong>Lun-Dom:</strong> 9:30 - 19:00</li>
                     </ul>
                     <div style="margin-top:10px; text-align:center;">
                         <img src="${getLogoPath('png')}" alt="Logo Isola Lido" style="width:260px;height:260px;object-fit:contain;background:none;box-shadow:none;border:none;">
@@ -153,9 +156,7 @@ function renderFooter() {
                     <p class="footer-credits">
                         Sito sviluppato da <strong>Dwebcoding</strong> 
                         <span class="footer-separator">|</span>
-                        Web Developer Professionista
-                        <span class="footer-separator">|</span>
-                        <a href="https://www.dwebcoding.it" target="_blank" rel="noopener noreferrer">www.dwebcoding.it</a>
+                        <a href="https://dwebcoding.github.io/Portfolio/" target="_blank" rel="noopener noreferrer">Portfolio</a>
                     </p>
                 </div>
             </div>

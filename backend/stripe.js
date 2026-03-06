@@ -5,6 +5,7 @@ import Donation from './models/donation.js';
 import mailer from './services/mailer.js';
 
 const router = express.Router();
+const TAVOLI_TOTALI = 121;
 
 // Chiave Stripe da env (senza fallback hardcoded)
 const stripeSecret = (process.env.STRIPE_SECRET_KEY || '').trim();
@@ -25,6 +26,30 @@ if (isStripeDisabled) {
 } else {
   stripe = new Stripe(stripeSecret, { apiVersion: null });
   console.log('[Stripe] secret prefix', stripeSecret?.slice(0, 4));
+}
+
+function parseBookingMetadata(rawBooking) {
+  if (typeof rawBooking !== 'string') return {};
+  const trimmed = rawBooking.trim();
+  if (!trimmed || (!trimmed.startsWith('{') && !trimmed.startsWith('['))) return {};
+  try {
+    return JSON.parse(trimmed);
+  } catch (_error) {
+    return {};
+  }
+}
+
+async function findTableConflict(date, tableNumbers) {
+  const numbers = Array.isArray(tableNumbers)
+    ? tableNumbers.map((n) => Number(n)).filter((n) => Number.isInteger(n) && n >= 1 && n <= TAVOLI_TOTALI)
+    : [];
+  if (!date || numbers.length === 0) return null;
+
+  return Booking.findOne({
+    status: 'active',
+    date,
+    tableNumbers: { $in: numbers }
+  }).lean();
 }
 
 // Webhook handler
@@ -120,6 +145,16 @@ router.post('/webhook', async (req, res) => {
 
         const hasBookingPayload = Boolean(normalizedBooking.date) && (normalizedBooking.tables + normalizedBooking.chairs + normalizedBooking.umbrellas) > 0;
         if (hasBookingPayload) {
+          const existingConflict = await findTableConflict(normalizedBooking.date, normalizedBooking.tableNumbers);
+          if (existingConflict) {
+            console.warn(
+              '[Stripe Webhook] tavolo gia prenotato per la data richiesta, salto salvataggio:',
+              normalizedBooking.date,
+              normalizedBooking.tableNumbers
+            );
+            return res.json({ received: true, ignored: 'table_already_booked' });
+          }
+
           bookingRecord = await Booking.create({
             ...normalizedBooking,
             email: session.customer_email,
@@ -203,6 +238,19 @@ router.post('/create-checkout-session', async (req, res) => {
     }
     const cents = Number.isFinite(Number(amount)) ? Math.round(Number(amount)) : null;
     if (!cents || cents <= 0) return res.status(400).json({ error: 'Importo non valido' });
+
+    const bookingData = parseBookingMetadata(metadata?.booking);
+    const incomingTableNumbers = Array.isArray(bookingData?.tableNumbers)
+      ? bookingData.tableNumbers.map((n) => Number(n)).filter((n) => Number.isInteger(n) && n >= 1 && n <= TAVOLI_TOTALI)
+      : [];
+    if (bookingData?.date && incomingTableNumbers.length > 0) {
+      const existingConflict = await findTableConflict(bookingData.date, incomingTableNumbers);
+      if (existingConflict) {
+        return res.status(409).json({
+          error: 'Tavolo non piu disponibile per la data selezionata. Aggiorna la pagina e scegli un altro tavolo.'
+        });
+      }
+    }
 
     const successUrl = process.env.SUCCESS_URL || 'https://www.isolalido.it/success.html';
     const cancelUrl = process.env.CANCEL_URL || 'https://www.isolalido.it/index.html';

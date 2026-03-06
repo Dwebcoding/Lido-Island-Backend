@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Gestione privata prenotazioni - Isola Lido">
     <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
-    <meta name="lido-api-base" content="https://backend-two-phi-89.vercel.app">
+    <meta name="lido-api-base" content="https://lido-island-backend.vercel.app">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' http://localhost:3000 http://127.0.0.1:3000 ws://127.0.0.1:5500 ws://localhost:5500 https://api.isolalido.it https://*.vercel.app; img-src 'self' data: https:">
     <title>Gestione Prenotazioni e Donazioni - Isola Lido</title>
     <link rel="icon" type="image/png" href="../images/logo/tabs/Logo Lido Island no background copy.png">
@@ -36,14 +36,10 @@
         <section class="booking-section" aria-labelledby="bookingAdminTitle">
             <div class="container">
                 <h1 class="section-title" id="bookingAdminTitle">Gestione Prenotazioni e Donazioni (Privata)</h1>
-                <p style="margin-bottom: 16px;">Pagina riservata al proprietario. Inserisci la chiave admin per visualizzare i dati.</p>
+                <p style="margin-bottom: 16px;">Pagina riservata al proprietario.</p>
 
                 <div class="booking-card" style="margin-bottom:16px;">
                     <form id="bookingAdminFilters" class="booking-form" autocomplete="off" style="display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items:end;">
-                        <div class="form-group">
-                            <label for="adminKey">Chiave admin</label>
-                            <input type="password" id="adminKey" placeholder="BOOKING_ADMIN_KEY" required>
-                        </div>
                         <div class="form-group">
                             <label for="adminDate">Data</label>
                             <input type="date" id="adminDate" name="date" placeholder="gg/mm/aaaa">
@@ -85,7 +81,7 @@
 
                 <div class="booking-card">
                     <h2 style="margin-bottom: 12px;">Prenotazioni</h2>
-                    <p id="bookingListMessage">Inserisci la chiave e premi "Carica lista".</p>
+                    <p id="bookingListMessage">Premi "Aggiorna" per caricare le prenotazioni.</p>
                     <div class="table-wrap">
                         <table class="admin-table">
                             <thead>

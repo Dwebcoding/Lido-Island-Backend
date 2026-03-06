@@ -1,0 +1,43 @@
+/* Success page custom style: usa palette e font coerenti con il sito */
+.success-container {
+  background: #f6fff6;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px #0001;
+  max-width: 420px;
+  margin: 60px auto 0 auto;
+  padding: 36px 28px 32px 28px;
+  text-align: center;
+  font-family: 'Space Grotesk', 'Bricolage Grotesque', Arial, sans-serif;
+}
+.success-container h1 {
+  color: #1a7f37;
+  font-size: 2.1em;
+  margin-bottom: 10px;
+  font-family: 'Bricolage Grotesque', Arial, sans-serif;
+}
+.success-container p {
+  font-size: 1.15em;
+  color: #222;
+  margin-bottom: 18px;
+}
+.success-container .success-icon {
+  font-size: 3.2em;
+  color: #1a7f37;
+  margin-bottom: 18px;
+}
+.success-container .success-btn {
+  background: #1a7f37;
+  color: #fff;
+  padding: 10px 28px;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: bold;
+  font-size: 1.1em;
+  border: none;
+  margin-top: 18px;
+  display: inline-block;
+  transition: background 0.2s;
+}
+.success-container .success-btn:hover {
+  background: #145c28;
+}

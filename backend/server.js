@@ -26,9 +26,16 @@ app.post('/api/payment/webhook', express.raw({ type: 'application/json' }), (req
 
 // Ora applico i middleware per tutte le altre route
 const corsOptions = {
-	origin: ['https://www.isolalido.it', 'https://isolalido.it'],
-	methods: ['GET', 'POST', 'OPTIONS'],
-	allowedHeaders: ['Content-Type', 'Authorization'],
+	origin: [
+		'https://www.isolalido.it',
+		'https://isolalido.it',
+		'http://localhost:5500',
+		'http://127.0.0.1:5500',
+		'http://localhost:3000',
+		'http://127.0.0.1:3000'
+	],
+	methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
+	allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key'],
 	preflightContinue: false
 };
 app.use(cors(corsOptions));
@@ -50,6 +57,9 @@ app.use('/api/payment', stripeRouter);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, '..')));
+
+// Serve HTML files from the html/ directory
+app.use('/html', express.static(path.join(__dirname, '..', 'html')));
 // Connessione a MongoDB
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/lido';
 mongoose.connect(MONGO_URI)

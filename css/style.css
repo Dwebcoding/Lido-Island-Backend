@@ -129,7 +129,6 @@
 }
 /* ============================================
    ISOLA LIDO - STYLESHEET PRINCIPALE
-   Author: Web Developer Professionista
    Versione: 1.0
    ============================================ */
 
@@ -1228,6 +1227,11 @@ main {
 .price-table td {
     padding: var(--spacing-md);
     text-align: left;
+}
+
+.price-table th:last-child,
+.price-table td:last-child {
+    text-align: right;
 }
 
 .price-table tbody tr {

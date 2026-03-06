@@ -4,7 +4,6 @@
 /* ============================================
    ISOLA LIDO - BOOKING SYSTEM
    Sistema di Prenotazione Tavoli e Sdraio
-   Author: Web Developer Professionista
    ============================================ */
 
 // ============ CONFIGURAZIONE ============
@@ -19,7 +18,7 @@ const EMAILJS_CONFIG = {
 
 const BOOKING_CONFIG = {
     TABLES: {
-        total: 121,
+        total: 110,
         price: 8.00,
         capacity: 8
     },
@@ -36,8 +35,8 @@ const BOOKING_CONFIG = {
 // 3) <meta name="lido-api-base" content="...">
 // 4) default stabile produzione (consigliato dominio custom API)
 // 5) fallback legacy deployment URL (solo emergenza)
-const STABLE_PROD_API = 'https://api.isolalido.it';
-const LEGACY_PROD_FALLBACK_API = 'https://backend-atrfva4ai-dwebcodings-projects-ab095673.vercel.app';
+const STABLE_PROD_API = 'https://backend-two-phi-89.vercel.app';
+const LEGACY_PROD_FALLBACK_API = 'https://backend-95rrnuo09-dwebcodings-projects-ab095673.vercel.app';
 const LOCAL_API = 'http://localhost:3000';
 
 function normalizeApiBase(value) {
@@ -89,20 +88,32 @@ let currentBooking = {
 
 // Variabili globali per i valori reali disponibili
 
-let tavoliDisponibiliIniziali = 121;
+let tavoliDisponibiliIniziali = 110;
 let sdraioDisponibiliIniziali = 65;
 let ombrelloniDisponibiliIniziali = 65;
 let tavoliOccupati = new Set();
+const MANUAL_BLOCKED_TABLES = {
+    '2026-04-05': [53],
+    '2026-04-06': [1, 2, 3, 4, 5, 6, 7, 8, 53, 54, 55, 56, 67, 68, 69, 70, 71]
+};
 
 const TABLE_ZONES = [
-    { label: 'Zona 1 - Tavoli coperti lato strada (1-25)', start: 1, end: 25 },
-    { label: 'Zona 2 - Esagono (26-36)', start: 26, end: 36 },
-    { label: 'Zona 3 - Tavoli coperti lato strada (37-45)', start: 37, end: 45 },
-    { label: 'Zona 4 - Area cani (46-66)', start: 46, end: 66 },
-    { label: 'Zona 5 - Tavoli coperti lato fiume (67-100)', start: 67, end: 100 },
-    { label: 'Zona 6 - Tavoli scoperti (101-110)', start: 101, end: 110 },
-    { label: 'Zona 7 - Tavoli cemento centro parco (111-121)', start: 111, end: 121 }
+    { label: 'Zona 1 - Tavoli primo telone lato strada (1-25)', start: 1, end: 25 },
+    { label: 'Zona 2 - Tavoli zona centrale con telo oscurante (26-39)', start: 26, end: 39 },
+    { label: 'Zona 3 - Tavoli secondo telone lato strada (40-52)', start: 40, end: 52 },
+    { label: 'Zona 4 - Zone area cani tavoli coperti (53-66)', start: 53, end: 66 },
+    { label: 'Zona 5 - Tavoli telone lato fiume (67-87)', start: 67, end: 87 },
+    { label: 'Zona 6 - Tavoli scoperti lato fiume (88-100)', start: 88, end: 100 },
+    { label: 'Zona 7 - Tavoli cemento centro parco (101-110)', start: 101, end: 110 }
 ];
+
+function getManualBlockedTablesByDate(date) {
+    const items = MANUAL_BLOCKED_TABLES[date];
+    if (!Array.isArray(items)) return [];
+    return items
+        .map((n) => Number(n))
+        .filter((n) => Number.isInteger(n) && n >= 1 && n <= BOOKING_CONFIG.TABLES.total);
+}
 
 function aggiornaContatoreTavoliLocale() {
     const availElem = document.getElementById('tableAvailability');
@@ -133,14 +144,16 @@ function renderTableNumberOptions() {
     const container = document.getElementById('tablePickerSections');
     if (!select || !container) return;
 
-    const selected = Number(currentBooking.tableNumbers[0] || 0);
-    select.value = selected ? String(selected) : '';
+    const selectedNumbers = Array.isArray(currentBooking.tableNumbers)
+        ? currentBooking.tableNumbers.map((n) => Number(n)).filter((n) => Number.isInteger(n))
+        : [];
+    select.value = selectedNumbers.join(',');
 
-    const sectionsHtml = TABLE_ZONES.map((zone, idx) => {
+    const sectionsHtml = TABLE_ZONES.map((zone) => {
         let buttons = '';
         for (let n = zone.start; n <= zone.end; n++) {
             const occupied = tavoliOccupati.has(n);
-            const isSelected = selected === n;
+            const isSelected = selectedNumbers.includes(n);
             const classes = [
                 'table-number-btn',
                 occupied ? 'occupied' : '',
@@ -151,10 +164,10 @@ function renderTableNumberOptions() {
         }
 
         return `
-            <section class="table-zone ${idx === 0 ? 'open' : ''}">
+            <section class="table-zone">
                 <button type="button" class="table-zone-toggle" data-zone-toggle>
                     <span>${zone.label}</span>
-                    <span class="material-symbols-rounded" aria-hidden="true">${idx === 0 ? 'expand_less' : 'expand_more'}</span>
+                    <span class="material-symbols-rounded" aria-hidden="true">expand_more</span>
                 </button>
                 <div class="table-zone-list">
                     ${buttons}
@@ -171,10 +184,18 @@ function updateSelectedTableLabel() {
     const trigger = document.getElementById('tablePickerButton');
     const triggerText = trigger?.querySelector('.table-picker-trigger-text');
     if (!label) return;
-    const selected = currentBooking.tableNumbers[0];
-    label.textContent = selected ? `Tavolo selezionato: ${selected}` : 'Tavolo selezionato: nessuno';
+    const selectedNumbers = Array.isArray(currentBooking.tableNumbers)
+        ? currentBooking.tableNumbers.map((n) => Number(n)).filter((n) => Number.isInteger(n)).sort((a, b) => a - b)
+        : [];
+    if (selectedNumbers.length === 0) {
+        label.textContent = 'Tavoli selezionati: nessuno';
+    } else {
+        label.textContent = `Tavoli selezionati (${selectedNumbers.length}): ${selectedNumbers.join(', ')}`;
+    }
     if (triggerText) {
-        triggerText.textContent = selected ? `Tavolo ${selected}` : 'Nessun tavolo selezionato';
+        triggerText.textContent = selectedNumbers.length > 0
+            ? `${selectedNumbers.length} tavol${selectedNumbers.length === 1 ? 'o' : 'i'} selezionat${selectedNumbers.length === 1 ? 'o' : 'i'}`
+            : 'Nessun tavolo selezionato';
     }
 }
 
@@ -279,16 +300,23 @@ function initBookingSystem() {
         const selected = Number(tableBtn.getAttribute('data-table-number') || 0);
         if (!Number.isInteger(selected) || selected <= 0) return;
 
-        currentBooking.tableNumbers = [selected];
-        currentBooking.tables = 1;
-        if (tableSelect) tableSelect.value = String(selected);
-        updateSelectedTableLabel();
+        const existing = new Set(
+            (Array.isArray(currentBooking.tableNumbers) ? currentBooking.tableNumbers : [])
+                .map((n) => Number(n))
+                .filter((n) => Number.isInteger(n))
+        );
+        if (existing.has(selected)) {
+            existing.delete(selected);
+        } else {
+            existing.add(selected);
+        }
+
+        currentBooking.tableNumbers = Array.from(existing).sort((a, b) => a - b);
+        currentBooking.tables = currentBooking.tableNumbers.length;
+        if (tableSelect) tableSelect.value = currentBooking.tableNumbers.join(',');
         renderTableNumberOptions();
         updateDisplay();
         aggiornaContatoreTavoliLocale();
-        if (pickerPanel) pickerPanel.classList.add('hidden');
-        picker?.classList.remove('is-open');
-        pickerButton?.setAttribute('aria-expanded', 'false');
     });
 
     document.addEventListener('click', (e) => {
@@ -359,6 +387,32 @@ function getBookedChairsByDate(date) {
         .reduce((total, b) => total + b.chairs, 0);
 }
 
+function incrementUmbrella() {
+    const current = Number(currentBooking.umbrellas || 0);
+    const next = Math.min(current + 1, Math.max(ombrelloniDisponibiliIniziali, 0));
+    currentBooking.umbrellas = next;
+    updateDisplay();
+}
+
+function decrementUmbrella() {
+    const current = Number(currentBooking.umbrellas || 0);
+    currentBooking.umbrellas = Math.max(current - 1, 0);
+    updateDisplay();
+}
+
+function incrementChair() {
+    const current = Number(currentBooking.chairs || 0);
+    const next = Math.min(current + 1, Math.max(sdraioDisponibiliIniziali, 0));
+    currentBooking.chairs = next;
+    updateDisplay();
+}
+
+function decrementChair() {
+    const current = Number(currentBooking.chairs || 0);
+    currentBooking.chairs = Math.max(current - 1, 0);
+    updateDisplay();
+}
+
 // ============ AGGIORNAMENTO DISPLAY ============
 
 /**
@@ -385,7 +439,9 @@ function updateDisplay() {
     if (tableSubtotalElem) {
         tableSubtotalElem.textContent = `Subtotale: € ${tableSubtotal.toFixed(2)}`;
     }
-    const chairSubtotalElem = document.getElementById('chairSubtotal');
+    const chairSubtotalElem =
+        document.getElementById('chairSubtotal') ||
+        document.getElementById('chairsUmbrellasSubtotal');
     if (chairSubtotalElem) {
         chairSubtotalElem.textContent = `Subtotale: € ${chairSubtotal.toFixed(2)}`;
     }
@@ -445,26 +501,40 @@ function updateAvailability() {
                 if (submitBtn) submitBtn.disabled = false;
 
                 tavoliDisponibiliIniziali = Number.isFinite(tavoliData.tavoliDisponibili) ? tavoliData.tavoliDisponibili : 0;
-                tavoliOccupati = new Set((tavoliOccupatiData?.tavoliOccupati || []).map((n) => Number(n)));
+                const fromApi = (tavoliOccupatiData?.tavoliOccupati || []).map((n) => Number(n));
+                const fromManual = getManualBlockedTablesByDate(date);
+                tavoliOccupati = new Set([...fromApi, ...fromManual]);
+                tavoliDisponibiliIniziali = Math.max(BOOKING_CONFIG.TABLES.total - tavoliOccupati.size, 0);
                 sdraioDisponibiliIniziali = Number.isFinite(sdraioData.sdraioDisponibili) ? sdraioData.sdraioDisponibili : 0;
                 ombrelloniDisponibiliIniziali = Number.isFinite(ombrelloniData.ombrelloniDisponibili) ? ombrelloniData.ombrelloniDisponibili : 0;
             }
 
-            const selected = currentBooking.tableNumbers[0];
-            if (selected && tavoliOccupati.has(Number(selected))) {
-                currentBooking.tableNumbers = [];
-                currentBooking.tables = 0;
-            }
+            const selectedNumbers = Array.isArray(currentBooking.tableNumbers) ? currentBooking.tableNumbers : [];
+            currentBooking.tableNumbers = selectedNumbers
+                .map((n) => Number(n))
+                .filter((n) => Number.isInteger(n) && !tavoliOccupati.has(n))
+                .sort((a, b) => a - b);
+            currentBooking.tables = currentBooking.tableNumbers.length;
             renderTableNumberOptions();
             aggiornaContatoreTavoliLocale();
             aggiornaContatoreSdraioLocale();
             aggiornaContatoreOmbrelloniLocale();
         })
         .catch(() => {
+            tavoliOccupati = new Set(getManualBlockedTablesByDate(date));
+            tavoliDisponibiliIniziali = Math.max(BOOKING_CONFIG.TABLES.total - tavoliOccupati.size, 0);
+            const selectedNumbers = Array.isArray(currentBooking.tableNumbers) ? currentBooking.tableNumbers : [];
+            currentBooking.tableNumbers = selectedNumbers
+                .map((n) => Number(n))
+                .filter((n) => Number.isInteger(n) && !tavoliOccupati.has(n))
+                .sort((a, b) => a - b);
+            currentBooking.tables = currentBooking.tableNumbers.length;
+            renderTableNumberOptions();
+            aggiornaContatoreTavoliLocale();
             const table = document.getElementById('tableAvailability');
             const chair = document.getElementById('chairAvailability');
             const umbrella = document.getElementById('umbrellaAvailability');
-            if (table) table.textContent = 'Disponibili: Errore tavoli';
+            if (table) table.textContent = `Disponibili: ${tavoliDisponibiliIniziali} tavoli`;
             if (chair) chair.textContent = 'Disponibili: Errore sdraio';
             if (umbrella) umbrella.textContent = 'Disponibili: Errore ombrelloni';
         });

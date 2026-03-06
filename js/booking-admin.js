@@ -82,7 +82,6 @@
     if (e) e.preventDefault();
 
     const API_BASE = resolveApiBase();
-    const key = document.getElementById('adminKey')?.value?.trim() || '';
     const date = document.getElementById('adminDate')?.value || '';
     const status = document.getElementById('adminStatus')?.value || '';
     const sortBy = document.getElementById('adminSort')?.value || 'newest';
@@ -105,14 +104,11 @@
     if (status) params.set('status', status);
 
     try {
-      const headers = {};
-      if (key) headers['x-admin-key'] = key;
-
       const [listRes, statsRes, donationsRes, donationStatsRes] = await Promise.all([
-        fetch(`${API_BASE}/api/booking/lista?${params.toString()}`, { headers }),
-        fetch(`${API_BASE}/api/booking/stats${date ? `?date=${encodeURIComponent(date)}` : ''}`, { headers }),
-        fetch(`${API_BASE}/api/booking/donazioni?${params.toString()}`, { headers }),
-        fetch(`${API_BASE}/api/booking/donazioni-stats${date ? `?date=${encodeURIComponent(date)}` : ''}`, { headers })
+        fetch(`${API_BASE}/api/booking/lista?${params.toString()}`),
+        fetch(`${API_BASE}/api/booking/stats${date ? `?date=${encodeURIComponent(date)}` : ''}`),
+        fetch(`${API_BASE}/api/booking/donazioni?${params.toString()}`),
+        fetch(`${API_BASE}/api/booking/donazioni-stats${date ? `?date=${encodeURIComponent(date)}` : ''}`)
       ]);
 
       if (!listRes.ok) {
@@ -205,21 +201,15 @@
 
   async function syncFromStripe() {
     const API_BASE = resolveApiBase();
-    const key = document.getElementById('adminKey')?.value?.trim() || '';
     const message = document.getElementById('bookingListMessage');
     const button = document.getElementById('syncStripeData');
-    if (!key) {
-      if (message) message.textContent = 'Inserisci prima la chiave admin per sincronizzare da Stripe.';
-      return;
-    }
 
     try {
       if (button) button.setAttribute('disabled', 'true');
       if (message) message.textContent = 'Sincronizzazione da Stripe in corso...';
 
       const res = await fetch(`${API_BASE}/api/booking/sync-stripe?limit=100`, {
-        method: 'POST',
-        headers: { 'x-admin-key': key }
+        method: 'POST'
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload.error || `Errore API (${res.status})`);
@@ -242,5 +232,8 @@
     if (form) form.addEventListener('submit', loadBookings);
     if (refresh) refresh.addEventListener('click', loadBookings);
     if (sync) sync.addEventListener('click', syncFromStripe);
+    
+    // Carica automaticamente le prenotazioni all'avvio
+    loadBookings();
   });
 })();

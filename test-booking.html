@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Booking API</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+    </style>
+</head>
+<body>
+    <h1>Test Booking API</h1>
+    <p>Questo test verifica che il frontend possa accedere ai dati di disponibilità dal backend.</p>
+    
+    <div id="test-results"></div>
+    
+    <script>
+        const API_BASE = 'http://localhost:3000';
+        const testDate = '2026-04-06';
+        
+        function addResult(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.textContent = message;
+            document.getElementById('test-results').appendChild(div);
+        }
+        
+        async function testEndpoint(endpoint, description) {
+            try {
+                const response = await fetch(`${API_BASE}${endpoint}?date=${testDate}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult(`${description}: ✅ Successo - ${JSON.stringify(data)}`, 'success');
+                    return true;
+                } else {
+                    addResult(`${description}: ❌ Errore ${response.status} - ${response.statusText}`, 'error');
+                    return false;
+                }
+            } catch (error) {
+                addResult(`${description}: ❌ Errore di rete - ${error.message}`, 'error');
+                return false;
+            }
+        }
+        
+        // Test tutti gli endpoint
+        async function runTests() {
+            addResult('Avvio test degli endpoint API...', 'info');
+            
+            const tests = [
+                ['/api/booking/tavoli-disponibili', 'Tavoli disponibili'],
+                ['/api/booking/tavoli-occupati', 'Tavoli occupati'],
+                ['/api/booking/sdraio-disponibili', 'Sdraio disponibili'],
+                ['/api/booking/ombrelloni-disponibili', 'Ombrelloni disponibili']
+            ];
+            
+            let successCount = 0;
+            for (const [endpoint, description] of tests) {
+                if (await testEndpoint(endpoint, description)) {
+                    successCount++;
+                }
+            }
+            
+            addResult(`Test completati: ${successCount}/${tests.length} endpoint funzionanti`, 
+                     successCount === tests.length ? 'success' : 'error');
+        }
+        
+        runTests();
+    </script>
+</body>
+</html>
