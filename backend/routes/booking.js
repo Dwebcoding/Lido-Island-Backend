@@ -1,4 +1,4 @@
-// Booking route (ESM)
+// Booking route (ESM) - No auth required
 import express from 'express';
 import Stripe from 'stripe';
 import Booking from '../models/booking.js';
