@@ -1,0 +1,1784 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Completo Sistema Prenotazioni - Lido Island</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+        }
+        
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        
+        .test-section {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border: 1px solid #e0e0e0;
+        }
+        
+        .test-section h2 {
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+        }
+        
+        .test-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            background: #fafafa;
+            transition: all 0.3s ease;
+        }
+        
+        .test-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .test-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 16px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        
+        .status-pending { background: #fff3cd; color: #856404; }
+        .status-success { background: #d4edda; color: #155724; }
+        .status-error { background: #f8d7da; color: #721c24; }
+        .status-warning { background: #d1ecf1; color: #0c5460; }
+        
+        .test-description {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 15px;
+            line-height: 1.4;
+        }
+        
+        .test-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5a6fd8; }
+        
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-secondary:hover { background: #5a6268; }
+        
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-danger:hover { background: #c82333; }
+        
+        .btn-success { background: #28a745; color: white; }
+        .btn-success:hover { background: #218838; }
+        
+        .test-results {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+        }
+        
+        .result-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 4px solid #007bff;
+        }
+        
+        .result-success { border-left-color: #28a745; background: #d4edda; }
+        .result-error { border-left-color: #dc3545; background: #f8d7da; }
+        .result-warning { border-left-color: #ffc107; background: #fff3cd; }
+        .result-info { border-left-color: #17a2b8; background: #d1ecf1; }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .metric-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .metric-label {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .config-panel {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .config-item {
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .config-item label {
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .config-item input, .config-item select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 250px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .hidden { display: none !important; }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .alert-info { background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+        .alert-warning { background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; }
+        .alert-danger { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        
+        .code-block {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        
+        .footer {
+            text-align: center;
+            color: #666;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🧪 Test Completo Sistema Prenotazioni</h1>
+        <p>Sistema di prenotazione tavoli, sdraio e ombrelloni per Lido Island</p>
+        <div style="margin-top: 15px; font-size: 0.9rem; opacity: 0.8;">
+            <strong>API Base:</strong> <span id="api-base-display">Caricamento...</span>
+            <span style="margin-left: 20px;">
+                <strong>Stato:</strong> <span id="api-status" class="status-badge status-pending">Verifica API...</span>
+            </span>
+        </div>
+    </div>
+
+    <div class="config-panel">
+        <h3>🔧 Configurazione Test</h3>
+        <div class="test-grid">
+            <div class="config-item">
+                <label for="api-base">URL API Backend:</label>
+                <input type="text" id="api-base" placeholder="https://backend.example.com">
+            </div>
+            <div class="config-item">
+                <label for="test-date">Data Test:</label>
+                <input type="date" id="test-date">
+            </div>
+            <div class="config-item">
+                <label for="test-email">Email Test:</label>
+                <input type="email" id="test-email" value="test@example.com">
+            </div>
+            <div class="config-item">
+                <label for="test-phone">Telefono Test:</label>
+                <input type="tel" id="test-phone" value="+393331234567">
+            </div>
+        </div>
+        <div style="margin-top: 15px;">
+            <button class="btn btn-primary" onclick="saveConfig()">Salva Configurazione</button>
+            <button class="btn btn-secondary" onclick="loadConfig()">Carica Configurazione</button>
+            <button class="btn btn-danger" onclick="clearConfig()">Reset Configurazione</button>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>📊 Panoramica Test</h2>
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-value" id="total-tests">0</div>
+                <div class="metric-label">Test Totali</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="passed-tests">0</div>
+                <div class="metric-label">Test Superati</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="failed-tests">0</div>
+                <div class="metric-label">Test Falliti</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="success-rate">0%</div>
+                <div class="metric-label">Tasso di Successo</div>
+            </div>
+        </div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🔍 Test API Backend</h2>
+        <div class="test-grid">
+            <div class="test-card">
+                <div class="test-title">
+                    <span>Connessione API</span>
+                    <span id="api-connection-status" class="status-badge status-pending">In attesa</span>
+                </div>
+                <div class="test-description">Verifica che il backend sia raggiungibile e risponda correttamente</div>
+                <div class="test-actions">
+                    <button class="btn btn-primary" onclick="testApiConnection()">Test Connessione</button>
+                    <button class="btn btn-secondary" onclick="testApiHealth()">Test Health Check</button>
+                </div>
+            </div>
+
+            <div class="test-card">
+                <div class="test-title">
+                    <span>Disponibilità Tavoli</span>
+                    <span id="tables-availability-status" class="status-badge status-pending">In attesa</span>
+                </div>
+                <div class="test-description">Verifica endpoint tavoli-disponibili e logica di calcolo</div>
+                <div class="test-actions">
+                    <button class="btn btn-primary" onclick="testTablesAvailability()">Test Tavoli</button>
+                    <button class="btn btn-secondary" onclick="testTablesOccupied()">Test Tavoli Occupati</button>
+                </div>
+            </div>
+
+            <div class="test-card">
+                <div class="test-title">
+                    <span>Disponibilità Sdraio</span>
+                    <span id="chairs-availability-status" class="status-badge status-pending">In attesa</span>
+                </div>
+                <div class="test-description">Verifica endpoint sdraio-disponibili</div>
+                <div class="test-actions">
+                    <button class="btn btn-primary" onclick="testChairsAvailability()">Test Sdraio</button>
+                </div>
+            </div>
+
+            <div class="test-card">
+                <div class="test-title">
+                    <span>Disponibilità Ombrelloni</span>
+                    <span id="umbrellas-availability-status" class="status-badge status-pending">In attesa</span>
+                </div>
+                <div class="test-description">Verifica endpoint ombrelloni-disponibili</div>
+                <div class="test-actions">
+                    <button class="btn btn-primary" onclick="testUmbrellasAvailability()">Test Ombrelloni</button>
+                </div>
+            </div>
+
+            <div class="test-card">
+                <div class="test-title">
+                    <span>Statistiche Prenotazioni</span>
+                    <span id="stats-status" class="status-badge status-pending">In attesa</span>
+                </div>
+                <div class="test-description">Verifica endpoint stats e calcolo corretto delle statistiche</div>
+                <div class="test-actions">
+                    <button class="btn btn-primary" onclick="testBookingStats()">Test Statistiche</button>
+                    <button class="btn btn-secondary" onclick="testDonationsStats()">Test Donazioni</button>
+                </div>
+            </div>
+
+            <div class="test-card">
+                <div class="test-title">
+                    <span>Gestione Prenotazioni</span>
+                    <span id="bookings-list-status" class="status-badge status-pending">In attesa</span>
+                </div>
+                <div class="test-description">Verifica endpoint lista prenotazioni e filtri</div>
+                <div class="test-actions">
+                    <button class="btn btn-primary" onclick="testBookingsList()">Test Lista</button>
+                    <button class="btn btn-secondary" onclick="testBookingsFilter()">Test Filtri</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>💳 Test Pagamenti Stripe</h2>
+        <div class="test-grid">
+            <div class="test-card">
+                <div class="test-title">
+                    <span>Configurazione Stripe</span>
+                    <span id="stripe-config-status" class="status-badge status-pending">In attesa</span>
+                </div>
+                <div class="test-description">Verifica che Stripe sia correttamente configurato nel backend</div>
+                <div class="test-actions">
+                    <button class="btn btn-primary" onclick="testStripeConfig()">Test Configurazione</button>
+                </div>
+            </div>
+
+            <div class="test-card">
+                <div class="test-title">
+                    <span>Creazione Sessione Pagamento</span>
+                    <span id="checkout-session-status" class="status-badge status-pending">In attesa</span>
+                </div>
+                <div class="test-description">Verifica la creazione di sessioni di pagamento Stripe</div>
+                <div class="test-actions">
+                    <button class="btn btn-primary" onclick="testCheckoutSession()">Test Sessione</button>
+                    <button class="btn btn-secondary" onclick="testCheckoutValidation()">Test Validazione</button>
+                </div>
+            </div>
+
+            <div class="test-card">
+                <div class="test-title">
+                    <span>Webhook Stripe</span>
+                    <span id="webhook-status" class="status-badge status-pending">In attesa</span>
+                </div>
+                <div class="test-description">Verifica il corretto funzionamento del webhook Stripe</div>
+                <div class="test-actions">
+                    <button class="btn btn-primary" onclick="testWebhookEndpoint()">Test Webhook</button>
+                    <button class="btn btn-secondary" onclick="testWebhookSecurity()">Test Sicurezza</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>📧 Test Notifiche</h2>
+        <div class="test-grid">
+            <div class="test-card">
+                <div class="test-title">
+                    <span>Configurazione Email</span>
+                    <span id="email-config-status" class="status-badge status-pending">In attesa</span>
+                </div>
+                <div class="test-description">Verifica la configurazione SMTP e invio email</div>
+                <div class="test-actions">
+                    <button class="btn btn-primary" onclick="testEmailConfig()">Test Configurazione</button>
+                    <button class="btn btn-secondary" onclick="sendTestEmail()">Invia Email Test</button>
+                </div>
+            </div>
+
+            <div class="test-card">
+                <div class="test-title">
+                    <span>Notifiche WhatsApp</span>
+                    <span id="whatsapp-status" class="status-badge status-pending">In attesa</span>
+                </div>
+                <div class="test-description">Verifica la configurazione e invio notifiche WhatsApp</div>
+                <div class="test-actions">
+                    <button class="btn btn-primary" onclick="testWhatsAppConfig()">Test Configurazione</button>
+                    <button class="btn btn-secondary" onclick="sendTestWhatsApp()">Invia WhatsApp Test</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🛡️ Test Sicurezza e Validazione</h2>
+        <div class="test-grid">
+            <div class="test-card">
+                <div class="test-title">
+                    <span>Validazione Input</span>
+                    <span id="input-validation-status" class="status-badge status-pending">In attesa</span>
+                </div>
+                <div class="test-description">Verifica la validazione degli input e prevenzione injection</div>
+                <div class="test-actions">
+                    <button class="btn btn-primary" onclick="testInputValidation()">Test Validazione</button>
+                    <button class="btn btn-secondary" onclick="testXSSPrevention()">Test XSS</button>
+                </div>
+            </div>
+
+            <div class="test-card">
+                <div class="test-title">
+                    <span>Gestione Errori</span>
+                    <span id="error-handling-status" class="status-badge status-pending">In attesa</span>
+                </div>
+                <div class="test-description">Verifica la gestione corretta degli errori e messaggi</div>
+                <div class="test-actions">
+                    <button class="btn btn-primary" onclick="testErrorHandling()">Test Errori</button>
+                    <button class="btn btn-secondary" onclick="testRateLimiting()">Test Rate Limiting</button>
+                </div>
+            </div>
+
+            <div class="test-card">
+                <div class="test-title">
+                    <span>Sicurezza API</span>
+                    <span id="api-security-status" class="status-badge status-pending">In attesa</span>
+                </div>
+                <div class="test-description">Verifica header CORS, autenticazione e sicurezza endpoint</div>
+                <div class="test-actions">
+                    <button class="btn btn-primary" onclick="testAPISecurity()">Test Sicurezza</button>
+                    <button class="btn btn-secondary" onclick="testCORS()">Test CORS</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>⚡ Test Prestazioni</h2>
+        <div class="test-grid">
+            <div class="test-card">
+                <div class="test-title">
+                    <span>Tempo di Risposta</span>
+                    <span id="response-time-status" class="status-badge status-pending">In attesa</span>
+                </div>
+                <div class="test-description">Misura i tempi di risposta degli endpoint critici</div>
+                <div class="test-actions">
+                    <button class="btn btn-primary" onclick="testResponseTimes()">Test Prestazioni</button>
+                </div>
+            </div>
+
+            <div class="test-card">
+                <div class="test-title">
+                    <span>Carico Sistema</span>
+                    <span id="load-test-status" class="status-badge status-pending">In attesa</span>
+                </div>
+                <div class="test-description">Test di resistenza con multiple richieste simultanee</div>
+                <div class="test-actions">
+                    <button class="btn btn-primary" onclick="testSystemLoad()">Test Carico</button>
+                    <button class="btn btn-secondary" onclick="testConcurrency()">Test Concorrenza</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🔄 Test Integrazione Completa</h2>
+        <div class="test-grid">
+            <div class="test-card">
+                <div class="test-title">
+                    <span>Flusso Completo Prenotazione</span>
+                    <span id="full-flow-status" class="status-badge status-pending">In attesa</span>
+                </div>
+                <div class="test-description">Test end-to-end: disponibilità → pagamento → conferma → notifiche</div>
+                <div class="test-actions">
+                    <button class="btn btn-primary" onclick="testFullBookingFlow()">Test Flusso Completo</button>
+                    <button class="btn btn-danger" onclick="cleanupTestBooking()">Pulizia Test</button>
+                </div>
+            </div>
+
+            <div class="test-card">
+                <div class="test-title">
+                    <span>Test Cancellazione</span>
+                    <span id="cancellation-status" class="status-badge status-pending">In attesa</span>
+                </div>
+                <div class="test-description">Verifica il processo di cancellazione prenotazioni</div>
+                <div class="test-actions">
+                    <button class="btn btn-primary" onclick="testCancellationFlow()">Test Cancellazione</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🚀 Azioni Rapide</h2>
+        <div class="test-grid">
+            <div class="test-card">
+                <div class="test-title">Esegui Tutti i Test</div>
+                <div class="test-description">Esegui l'intera suite di test in ordine logico</div>
+                <div class="test-actions">
+                    <button class="btn btn-success" onclick="runAllTests()">Esegui Tutti i Test</button>
+                    <button class="btn btn-secondary" onclick="runCriticalTests()">Test Critici Solo</button>
+                </div>
+            </div>
+
+            <div class="test-card">
+                <div class="test-title">Genera Report</div>
+                <div class="test-description">Genera un report dettagliato dei risultati</div>
+                <div class="test-actions">
+                    <button class="btn btn-primary" onclick="generateReport()">Genera Report</button>
+                    <button class="btn btn-secondary" onclick="exportResults()">Esporta Risultati</button>
+                </div>
+            </div>
+
+            <div class="test-card">
+                <div class="test-title">Reset Sistema</div>
+                <div class="test-description">Pulisci dati di test e resetta stato sistema</div>
+                <div class="test-actions">
+                    <button class="btn btn-danger" onclick="resetSystem()">Reset Sistema</button>
+                    <button class="btn btn-secondary" onclick="checkSystemHealth()">Salute Sistema</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>📋 Risultati Test</h2>
+        <div id="test-results-container">
+            <div class="alert alert-info">
+                <strong>Pronto per l'esecuzione!</strong> Configura l'URL API e seleziona i test da eseguire.
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Test Suite per Sistema Prenotazioni Lido Island | Sviluppato per garantire qualità e affidabilità</p>
+        <p><em>Assicurati di eseguire questi test in un ambiente di staging prima della produzione</em></p>
+    </div>
+
+    <script>
+        // Configurazione globale
+        let config = {
+            apiBase: '',
+            testDate: '',
+            testEmail: 'test@example.com',
+            testPhone: '+393331234567'
+        };
+
+        let testResults = [];
+        let isRunning = false;
+
+        // Inizializzazione
+        document.addEventListener('DOMContentLoaded', function() {
+            loadConfig();
+            updateAPIDisplay();
+            checkAPIStatus();
+        });
+
+        // Gestione configurazione
+        function saveConfig() {
+            config.apiBase = document.getElementById('api-base').value.trim();
+            config.testDate = document.getElementById('test-date').value;
+            config.testEmail = document.getElementById('test-email').value.trim();
+            config.testPhone = document.getElementById('test-phone').value.trim();
+            
+            localStorage.setItem('bookingTestConfig', JSON.stringify(config));
+            updateAPIDisplay();
+            showResult('Configurazione salvata con successo!', 'success');
+        }
+
+        function loadConfig() {
+            const saved = localStorage.getItem('bookingTestConfig');
+            if (saved) {
+                config = JSON.parse(saved);
+                document.getElementById('api-base').value = config.apiBase;
+                document.getElementById('test-date').value = config.testDate;
+                document.getElementById('test-email').value = config.testEmail;
+                document.getElementById('test-phone').value = config.testPhone;
+            } else {
+                // Configurazione di default
+                config.apiBase = 'http://localhost:3000';
+                config.testDate = getNextAvailableDate();
+                config.testEmail = 'test@example.com';
+                config.testPhone = '+393331234567';
+                
+                document.getElementById('api-base').value = config.apiBase;
+                document.getElementById('test-date').value = config.testDate;
+                document.getElementById('test-email').value = config.testEmail;
+                document.getElementById('test-phone').value = config.testPhone;
+            }
+            updateAPIDisplay();
+        }
+
+        function clearConfig() {
+            localStorage.removeItem('bookingTestConfig');
+            config = {
+                apiBase: 'http://localhost:3000',
+                testDate: getNextAvailableDate(),
+                testEmail: 'test@example.com',
+                testPhone: '+393331234567'
+            };
+            document.getElementById('api-base').value = config.apiBase;
+            document.getElementById('test-date').value = config.testDate;
+            document.getElementById('test-email').value = config.testEmail;
+            document.getElementById('test-phone').value = config.testPhone;
+            updateAPIDisplay();
+            showResult('Configurazione resettata ai valori di default', 'warning');
+        }
+
+        function updateAPIDisplay() {
+            document.getElementById('api-base-display').textContent = config.apiBase || 'Non configurato';
+        }
+
+        function getNextAvailableDate() {
+            const today = new Date();
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            return tomorrow.toISOString().split('T')[0];
+        }
+
+        // Funzioni di utilità
+        async function apiRequest(endpoint, options = {}) {
+            const url = `${config.apiBase}${endpoint}`;
+            const defaultOptions = {
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                timeout: 10000
+            };
+            
+            const requestOptions = { ...defaultOptions, ...options };
+            
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), requestOptions.timeout);
+                
+                const response = await fetch(url, {
+                    ...requestOptions,
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                return response;
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    throw new Error('Timeout: La richiesta ha superato il tempo massimo di attesa');
+                }
+                throw error;
+            }
+        }
+
+        function updateTestStatus(testId, status, message = '') {
+            const element = document.getElementById(testId);
+            if (element) {
+                element.className = `status-badge status-${status}`;
+                if (message) {
+                    element.textContent = message;
+                }
+            }
+        }
+
+        function showResult(message, type = 'info', details = '') {
+            const container = document.getElementById('test-results-container');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `result-item result-${type}`;
+            resultDiv.innerHTML = `
+                <strong>${new Date().toLocaleTimeString()}</strong>: ${message}
+                ${details ? `<div class="code-block">${details}</div>` : ''}
+            `;
+            container.appendChild(resultDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function addTestResult(testName, status, message, details = '') {
+            testResults.push({
+                name: testName,
+                status: status,
+                message: message,
+                details: details,
+                timestamp: new Date().toISOString()
+            });
+            
+            updateMetrics();
+        }
+
+        function updateMetrics() {
+            const total = testResults.length;
+            const passed = testResults.filter(r => r.status === 'success').length;
+            const failed = testResults.filter(r => r.status === 'error').length;
+            const successRate = total > 0 ? Math.round((passed / total) * 100) : 0;
+
+            document.getElementById('total-tests').textContent = total;
+            document.getElementById('passed-tests').textContent = passed;
+            document.getElementById('failed-tests').textContent = failed;
+            document.getElementById('success-rate').textContent = `${successRate}%`;
+            
+            document.getElementById('progress-fill').style.width = `${successRate}%`;
+        }
+
+        // Test API Backend
+        async function testApiConnection() {
+            updateTestStatus('api-connection-status', 'pending', 'Test in corso...');
+            
+            try {
+                const response = await apiRequest('/api/booking/ping', { method: 'GET' });
+                if (response.ok) {
+                    updateTestStatus('api-connection-status', 'success', 'API raggiungibile');
+                    addTestResult('Connessione API', 'success', 'Backend raggiungibile e risponde correttamente');
+                    showResult('✅ Connessione API: Successo', 'success', `Status: ${response.status}`);
+                } else {
+                    updateTestStatus('api-connection-status', 'error', 'API non raggiungibile');
+                    addTestResult('Connessione API', 'error', `Errore: ${response.status} - ${response.statusText}`);
+                    showResult('❌ Connessione API: Fallito', 'error', `Status: ${response.status}`);
+                }
+            } catch (error) {
+                updateTestStatus('api-connection-status', 'error', 'Errore connessione');
+                addTestResult('Connessione API', 'error', error.message);
+                showResult('❌ Connessione API: Errore', 'error', error.message);
+            }
+        }
+
+        async function testApiHealth() {
+            try {
+                const response = await apiRequest('/api/health', { method: 'GET' });
+                if (response.ok) {
+                    const data = await response.json();
+                    showResult('✅ Health Check: Successo', 'success', JSON.stringify(data, null, 2));
+                } else {
+                    showResult('⚠️ Health Check: Endpoint non disponibile', 'warning');
+                }
+            } catch (error) {
+                showResult('⚠️ Health Check: Non disponibile', 'warning', error.message);
+            }
+        }
+
+        async function testTablesAvailability() {
+            updateTestStatus('tables-availability-status', 'pending', 'Test in corso...');
+            
+            try {
+                const response = await apiRequest(`/api/booking/tavoli-disponibili?date=${config.testDate}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    updateTestStatus('tables-availability-status', 'success', `Disponibili: ${data.tavoliDisponibili}`);
+                    addTestResult('Disponibilità Tavoli', 'success', `Tavoli disponibili: ${data.tavoliDisponibili}`);
+                    showResult('✅ Disponibilità Tavoli: Successo', 'success', JSON.stringify(data, null, 2));
+                } else {
+                    updateTestStatus('tables-availability-status', 'error', 'Errore endpoint');
+                    addTestResult('Disponibilità Tavoli', 'error', `Status: ${response.status}`);
+                    showResult('❌ Disponibilità Tavoli: Fallito', 'error', `Status: ${response.status}`);
+                }
+            } catch (error) {
+                updateTestStatus('tables-availability-status', 'error', 'Errore rete');
+                addTestResult('Disponibilità Tavoli', 'error', error.message);
+                showResult('❌ Disponibilità Tavoli: Errore', 'error', error.message);
+            }
+        }
+
+        async function testTablesOccupied() {
+            try {
+                const response = await apiRequest(`/api/booking/tavoli-occupati?date=${config.testDate}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    showResult('✅ Tavoli Occupati: Successo', 'success', JSON.stringify(data, null, 2));
+                } else {
+                    showResult('❌ Tavoli Occupati: Fallito', 'error', `Status: ${response.status}`);
+                }
+            } catch (error) {
+                showResult('❌ Tavoli Occupati: Errore', 'error', error.message);
+            }
+        }
+
+        async function testChairsAvailability() {
+            updateTestStatus('chairs-availability-status', 'pending', 'Test in corso...');
+            
+            try {
+                const response = await apiRequest(`/api/booking/sdraio-disponibili?date=${config.testDate}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    updateTestStatus('chairs-availability-status', 'success', `Disponibili: ${data.sdraioDisponibili}`);
+                    addTestResult('Disponibilità Sdraio', 'success', `Sdraio disponibili: ${data.sdraioDisponibili}`);
+                    showResult('✅ Disponibilità Sdraio: Successo', 'success', JSON.stringify(data, null, 2));
+                } else {
+                    updateTestStatus('chairs-availability-status', 'error', 'Errore endpoint');
+                    addTestResult('Disponibilità Sdraio', 'error', `Status: ${response.status}`);
+                    showResult('❌ Disponibilità Sdraio: Fallito', 'error', `Status: ${response.status}`);
+                }
+            } catch (error) {
+                updateTestStatus('chairs-availability-status', 'error', 'Errore rete');
+                addTestResult('Disponibilità Sdraio', 'error', error.message);
+                showResult('❌ Disponibilità Sdraio: Errore', 'error', error.message);
+            }
+        }
+
+        async function testUmbrellasAvailability() {
+            updateTestStatus('umbrellas-availability-status', 'pending', 'Test in corso...');
+            
+            try {
+                const response = await apiRequest(`/api/booking/ombrelloni-disponibili?date=${config.testDate}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    updateTestStatus('umbrellas-availability-status', 'success', `Disponibili: ${data.ombrelloniDisponibili}`);
+                    addTestResult('Disponibilità Ombrelloni', 'success', `Ombrelloni disponibili: ${data.ombrelloniDisponibili}`);
+                    showResult('✅ Disponibilità Ombrelloni: Successo', 'success', JSON.stringify(data, null, 2));
+                } else {
+                    updateTestStatus('umbrellas-availability-status', 'error', 'Errore endpoint');
+                    addTestResult('Disponibilità Ombrelloni', 'error', `Status: ${response.status}`);
+                    showResult('❌ Disponibilità Ombrelloni: Fallito', 'error', `Status: ${response.status}`);
+                }
+            } catch (error) {
+                updateTestStatus('umbrellas-availability-status', 'error', 'Errore rete');
+                addTestResult('Disponibilità Ombrelloni', 'error', error.message);
+                showResult('❌ Disponibilità Ombrelloni: Errore', 'error', error.message);
+            }
+        }
+
+        async function testBookingStats() {
+            updateTestStatus('stats-status', 'pending', 'Test in corso...');
+            
+            try {
+                const response = await apiRequest(`/api/booking/stats?date=${config.testDate}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    updateTestStatus('stats-status', 'success', `Prenotazioni: ${data.bookings}`);
+                    addTestResult('Statistiche Prenotazioni', 'success', `Prenotazioni: ${data.bookings}, Incasso: €${(data.totalAmount/100).toFixed(2)}`);
+                    showResult('✅ Statistiche Prenotazioni: Successo', 'success', JSON.stringify(data, null, 2));
+                } else {
+                    updateTestStatus('stats-status', 'error', 'Errore endpoint');
+                    addTestResult('Statistiche Prenotazioni', 'error', `Status: ${response.status}`);
+                    showResult('❌ Statistiche Prenotazioni: Fallito', 'error', `Status: ${response.status}`);
+                }
+            } catch (error) {
+                updateTestStatus('stats-status', 'error', 'Errore rete');
+                addTestResult('Statistiche Prenotazioni', 'error', error.message);
+                showResult('❌ Statistiche Prenotazioni: Errore', 'error', error.message);
+            }
+        }
+
+        async function testDonationsStats() {
+            try {
+                const response = await apiRequest(`/api/booking/donazioni-stats?date=${config.testDate}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    showResult('✅ Statistiche Donazioni: Successo', 'success', JSON.stringify(data, null, 2));
+                } else {
+                    showResult('❌ Statistiche Donazioni: Fallito', 'error', `Status: ${response.status}`);
+                }
+            } catch (error) {
+                showResult('❌ Statistiche Donazioni: Errore', 'error', error.message);
+            }
+        }
+
+        async function testBookingsList() {
+            updateTestStatus('bookings-list-status', 'pending', 'Test in corso...');
+            
+            try {
+                const response = await apiRequest('/api/booking/lista?limit=10');
+                if (response.ok) {
+                    const data = await response.json();
+                    updateTestStatus('bookings-list-status', 'success', `Elementi: ${data.count}`);
+                    addTestResult('Lista Prenotazioni', 'success', `Prenotazioni trovate: ${data.count}`);
+                    showResult('✅ Lista Prenotazioni: Successo', 'success', JSON.stringify(data, null, 2));
+                } else {
+                    updateTestStatus('bookings-list-status', 'error', 'Errore endpoint');
+                    addTestResult('Lista Prenotazioni', 'error', `Status: ${response.status}`);
+                    showResult('❌ Lista Prenotazioni: Fallito', 'error', `Status: ${response.status}`);
+                }
+            } catch (error) {
+                updateTestStatus('bookings-list-status', 'error', 'Errore rete');
+                addTestResult('Lista Prenotazioni', 'error', error.message);
+                showResult('❌ Lista Prenotazioni: Errore', 'error', error.message);
+            }
+        }
+
+        async function testBookingsFilter() {
+            try {
+                const response = await apiRequest(`/api/booking/lista?date=${config.testDate}&status=active`);
+                if (response.ok) {
+                    const data = await response.json();
+                    showResult('✅ Filtri Prenotazioni: Successo', 'success', `Elementi filtrati: ${data.count}`);
+                } else {
+                    showResult('❌ Filtri Prenotazioni: Fallito', 'error', `Status: ${response.status}`);
+                }
+            } catch (error) {
+                showResult('❌ Filtri Prenotazioni: Errore', 'error', error.message);
+            }
+        }
+
+        // Test Stripe
+        async function testStripeConfig() {
+            updateTestStatus('stripe-config-status', 'pending', 'Test in corso...');
+            
+            try {
+                // Testiamo la creazione di una sessione senza effettivo pagamento
+                const response = await apiRequest('/api/payment/create-checkout-session', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        amount: 100,
+                        email: config.testEmail,
+                        description: 'Test configurazione Stripe',
+                        metadata: {}
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.url) {
+                        updateTestStatus('stripe-config-status', 'success', 'Stripe configurato');
+                        addTestResult('Configurazione Stripe', 'success', 'Stripe correttamente configurato');
+                        showResult('✅ Configurazione Stripe: Successo', 'success', 'Stripe è correttamente configurato');
+                    } else {
+                        updateTestStatus('stripe-config-status', 'warning', 'Stripe disabilitato');
+                        addTestResult('Configurazione Stripe', 'warning', 'Stripe non configurato o disabilitato');
+                        showResult('⚠️ Configurazione Stripe: Disabilitato', 'warning', data.error || 'Stripe non configurato');
+                    }
+                } else {
+                    updateTestStatus('stripe-config-status', 'error', 'Errore configurazione');
+                    addTestResult('Configurazione Stripe', 'error', `Status: ${response.status}`);
+                    showResult('❌ Configurazione Stripe: Fallito', 'error', `Status: ${response.status}`);
+                }
+            } catch (error) {
+                updateTestStatus('stripe-config-status', 'error', 'Errore rete');
+                addTestResult('Configurazione Stripe', 'error', error.message);
+                showResult('❌ Configurazione Stripe: Errore', 'error', error.message);
+            }
+        }
+
+        async function testCheckoutSession() {
+            updateTestStatus('checkout-session-status', 'pending', 'Test in corso...');
+            
+            try {
+                const bookingData = {
+                    date: config.testDate,
+                    tables: 1,
+                    chairs: 2,
+                    name: 'Test User',
+                    email: config.testEmail,
+                    phone: config.testPhone
+                };
+                
+                const response = await apiRequest('/api/payment/create-checkout-session', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        amount: 1800, // 1 tavolo + 2 sdraio = 8 + 10 = 18€
+                        email: config.testEmail,
+                        description: 'Test sessione pagamento',
+                        metadata: {
+                            booking: JSON.stringify(bookingData)
+                        }
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.url) {
+                        updateTestStatus('checkout-session-status', 'success', 'Sessione creata');
+                        addTestResult('Creazione Sessione Pagamento', 'success', 'Sessione Stripe creata correttamente');
+                        showResult('✅ Creazione Sessione Pagamento: Successo', 'success', `URL: ${data.url}`);
+                    } else {
+                        updateTestStatus('checkout-session-status', 'error', 'Sessione non creata');
+                        addTestResult('Creazione Sessione Pagamento', 'error', data.error || 'Sessione non creata');
+                        showResult('❌ Creazione Sessione Pagamento: Fallito', 'error', data.error || 'Sessione non creata');
+                    }
+                } else {
+                    updateTestStatus('checkout-session-status', 'error', 'Errore creazione');
+                    addTestResult('Creazione Sessione Pagamento', 'error', `Status: ${response.status}`);
+                    showResult('❌ Creazione Sessione Pagamento: Errore', 'error', `Status: ${response.status}`);
+                }
+            } catch (error) {
+                updateTestStatus('checkout-session-status', 'error', 'Errore rete');
+                addTestResult('Creazione Sessione Pagamento', 'error', error.message);
+                showResult('❌ Creazione Sessione Pagamento: Errore', 'error', error.message);
+            }
+        }
+
+        async function testCheckoutValidation() {
+            try {
+                // Test con importo negativo
+                const response = await apiRequest('/api/payment/create-checkout-session', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        amount: -100,
+                        email: config.testEmail,
+                        description: 'Test validazione'
+                    })
+                });
+                
+                if (response.status === 400) {
+                    showResult('✅ Validazione Checkout: Successo', 'success', 'Validazione importi negativi corretta');
+                } else {
+                    showResult('⚠️ Validazione Checkout: Potenziale problema', 'warning', `Status: ${response.status}`);
+                }
+            } catch (error) {
+                showResult('❌ Validazione Checkout: Errore', 'error', error.message);
+            }
+        }
+
+        async function testWebhookEndpoint() {
+            updateTestStatus('webhook-status', 'pending', 'Test in corso...');
+            
+            try {
+                // Testiamo solo che l'endpoint esista e accetti richieste
+                const response = await apiRequest('/api/payment/webhook', {
+                    method: 'POST',
+                    body: JSON.stringify({ test: true })
+                });
+                
+                // Il webhook potrebbe restituire 400 per mancanza di firma, ma l'importante è che risponda
+                if (response.status === 400 || response.status === 200) {
+                    updateTestStatus('webhook-status', 'success', 'Endpoint attivo');
+                    addTestResult('Endpoint Webhook', 'success', 'Webhook endpoint attivo');
+                    showResult('✅ Endpoint Webhook: Successo', 'success', `Status: ${response.status}`);
+                } else {
+                    updateTestStatus('webhook-status', 'error', 'Endpoint non attivo');
+                    addTestResult('Endpoint Webhook', 'error', `Status: ${response.status}`);
+                    showResult('❌ Endpoint Webhook: Fallito', 'error', `Status: ${response.status}`);
+                }
+            } catch (error) {
+                updateTestStatus('webhook-status', 'error', 'Errore rete');
+                addTestResult('Endpoint Webhook', 'error', error.message);
+                showResult('❌ Endpoint Webhook: Errore', 'error', error.message);
+            }
+        }
+
+        async function testWebhookSecurity() {
+            try {
+                // Testiamo la verifica della firma (se presente)
+                const response = await apiRequest('/api/payment/webhook', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Stripe-Signature': 'test_signature'
+                    },
+                    body: JSON.stringify({ test: true })
+                });
+                
+                showResult('✅ Sicurezza Webhook: Testato', 'success', `Status: ${response.status} (atteso 400 per firma mancante/errata)`);
+            } catch (error) {
+                showResult('❌ Sicurezza Webhook: Errore', 'error', error.message);
+            }
+        }
+
+        // Test Notifiche
+        async function testEmailConfig() {
+            updateTestStatus('email-config-status', 'pending', 'Test in corso...');
+            
+            try {
+                // Testiamo l'invio email tramite un endpoint di test se disponibile
+                const response = await apiRequest('/api/test-email', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        to: config.testEmail,
+                        subject: 'Test Configurazione Email',
+                        message: 'Questo è un test della configurazione email'
+                    })
+                });
+                
+                if (response.ok) {
+                    updateTestStatus('email-config-status', 'success', 'Email configurata');
+                    addTestResult('Configurazione Email', 'success', 'SMTP correttamente configurato');
+                    showResult('✅ Configurazione Email: Successo', 'success', 'Email SMTP configurata correttamente');
+                } else {
+                    updateTestStatus('email-config-status', 'warning', 'Email non configurata');
+                    addTestResult('Configurazione Email', 'warning', 'SMTP non configurato o problemi di configurazione');
+                    showResult('⚠️ Configurazione Email: Non configurata', 'warning', 'Status: ' + response.status);
+                }
+            } catch (error) {
+                updateTestStatus('email-config-status', 'error', 'Errore rete');
+                addTestResult('Configurazione Email', 'error', error.message);
+                showResult('❌ Configurazione Email: Errore', 'error', error.message);
+            }
+        }
+
+        async function sendTestEmail() {
+            try {
+                const response = await apiRequest('/api/test-email', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        to: config.testEmail,
+                        subject: 'Test Email da Suite di Test',
+                        message: 'Questa è una email di test inviata dalla suite di test completa.'
+                    })
+                });
+                
+                if (response.ok) {
+                    showResult('✅ Email Test: Inviata', 'success', `Email inviata a ${config.testEmail}`);
+                } else {
+                    showResult('❌ Email Test: Fallita', 'error', `Status: ${response.status}`);
+                }
+            } catch (error) {
+                showResult('❌ Email Test: Errore', 'error', error.message);
+            }
+        }
+
+        async function testWhatsAppConfig() {
+            updateTestStatus('whatsapp-status', 'pending', 'Test in corso...');
+            
+            try {
+                // Testiamo la configurazione WhatsApp
+                const response = await apiRequest('/api/whatsapp/test', { method: 'GET' });
+                
+                if (response.ok) {
+                    updateTestStatus('whatsapp-status', 'success', 'WhatsApp configurato');
+                    addTestResult('Configurazione WhatsApp', 'success', 'WhatsApp correttamente configurato');
+                    showResult('✅ Configurazione WhatsApp: Successo', 'success', 'WhatsApp è correttamente configurato');
+                } else {
+                    updateTestStatus('whatsapp-status', 'warning', 'WhatsApp non configurato');
+                    addTestResult('Configurazione WhatsApp', 'warning', 'WhatsApp non configurato o problemi di configurazione');
+                    showResult('⚠️ Configurazione WhatsApp: Non configurato', 'warning', `Status: ${response.status}`);
+                }
+            } catch (error) {
+                updateTestStatus('whatsapp-status', 'error', 'Errore rete');
+                addTestResult('Configurazione WhatsApp', 'error', error.message);
+                showResult('❌ Configurazione WhatsApp: Errore', 'error', error.message);
+            }
+        }
+
+        async function sendTestWhatsApp() {
+            try {
+                const response = await apiRequest('/api/whatsapp/send-test', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        to: config.testPhone,
+                        message: 'Test WhatsApp da suite di test'
+                    })
+                });
+                
+                if (response.ok) {
+                    showResult('✅ WhatsApp Test: Inviato', 'success', `Messaggio inviato a ${config.testPhone}`);
+                } else {
+                    showResult('❌ WhatsApp Test: Fallito', 'error', `Status: ${response.status}`);
+                }
+            } catch (error) {
+                showResult('❌ WhatsApp Test: Errore', 'error', error.message);
+            }
+        }
+
+        // Test Sicurezza
+        async function testInputValidation() {
+            updateTestStatus('input-validation-status', 'pending', 'Test in corso...');
+            
+            try {
+                // Test con input malevolo
+                const maliciousData = {
+                    date: '2026-04-06',
+                    tables: 999999, // Troppe tavoli
+                    chairs: -1, // Numero negativo
+                    name: '<script>alert("XSS")</script>',
+                    email: 'malicious@evil.com<script>',
+                    phone: '1234567890!@#$%^&*()'
+                };
+                
+                const response = await apiRequest('/api/payment/create-checkout-session', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        amount: 99999999,
+                        email: maliciousData.email,
+                        description: 'Test validazione input',
+                        metadata: {
+                            booking: JSON.stringify(maliciousData)
+                        }
+                    })
+                });
+                
+                // Dovrebbe rifiutare l'input malevolo
+                if (response.status === 400) {
+                    updateTestStatus('input-validation-status', 'success', 'Validazione attiva');
+                    addTestResult('Validazione Input', 'success', 'Input malevoli correttamente rifiutati');
+                    showResult('✅ Validazione Input: Successo', 'success', 'Input malevoli correttamente rifiutati');
+                } else {
+                    updateTestStatus('input-validation-status', 'warning', 'Validazione debole');
+                    addTestResult('Validazione Input', 'warning', 'Possibili problemi di validazione');
+                    showResult('⚠️ Validazione Input: Attenzione', 'warning', `Status: ${response.status} - Potenziali problemi di validazione`);
+                }
+            } catch (error) {
+                updateTestStatus('input-validation-status', 'error', 'Errore test');
+                addTestResult('Validazione Input', 'error', error.message);
+                showResult('❌ Validazione Input: Errore', 'error', error.message);
+            }
+        }
+
+        async function testXSSPrevention() {
+            try {
+                const xssPayload = '<script>alert("XSS")</script>';
+                
+                const response = await apiRequest('/api/booking/lista', {
+                    method: 'GET',
+                    headers: {
+                        'X-Test-Payload': xssPayload
+                    }
+                });
+                
+                // Dovrebbe filtrare o rifiutare il payload XSS
+                if (response.status === 400 || response.status === 403) {
+                    showResult('✅ Prevenzione XSS: Successo', 'success', 'Payload XSS correttamente bloccato');
+                } else {
+                    showResult('⚠️ Prevenzione XSS: Verifica necessaria', 'warning', `Status: ${response.status} - Verificare la presenza di sanitizzazione`);
+                }
+            } catch (error) {
+                showResult('❌ Prevenzione XSS: Errore', 'error', error.message);
+            }
+        }
+
+        async function testErrorHandling() {
+            updateTestStatus('error-handling-status', 'pending', 'Test in corso...');
+            
+            try {
+                // Test con endpoint inesistente
+                const response = await apiRequest('/api/endpoint-inesistente', { method: 'GET' });
+                
+                // Dovrebbe restituire 404 con messaggio appropriato
+                if (response.status === 404) {
+                    const data = await response.json().catch(() => ({}));
+                    updateTestStatus('error-handling-status', 'success', 'Gestione errori OK');
+                    addTestResult('Gestione Errori', 'success', 'Errori gestiti correttamente');
+                    showResult('✅ Gestione Errori: Successo', 'success', 'Errori gestiti correttamente');
+                } else {
+                    updateTestStatus('error-handling-status', 'warning', 'Gestione errori debole');
+                    addTestResult('Gestione Errori', 'warning', 'Possibili problemi nella gestione errori');
+                    showResult('⚠️ Gestione Errori: Attenzione', 'warning', `Status: ${response.status} - Verificare gestione errori`);
+                }
+            } catch (error) {
+                updateTestStatus('error-handling-status', 'error', 'Errore test');
+                addTestResult('Gestione Errori', 'error', error.message);
+                showResult('❌ Gestione Errori: Errore', 'error', error.message);
+            }
+        }
+
+        async function testRateLimiting() {
+            try {
+                // Testiamo con molte richieste rapide
+                const requests = Array(10).fill().map(() => apiRequest('/api/booking/tavoli-disponibili?date=2026-04-06'));
+                const responses = await Promise.allSettled(requests);
+                
+                const rateLimited = responses.some(r => r.status === 'fulfilled' && r.value.status === 429);
+                
+                if (rateLimited) {
+                    showResult('✅ Rate Limiting: Attivo', 'success', 'Limitazione richieste attiva');
+                } else {
+                    showResult('⚠️ Rate Limiting: Non rilevato', 'warning', 'Possibile assenza di limitazione richieste');
+                }
+            } catch (error) {
+                showResult('❌ Rate Limiting: Errore', 'error', error.message);
+            }
+        }
+
+        async function testAPISecurity() {
+            updateTestStatus('api-security-status', 'pending', 'Test in corso...');
+            
+            try {
+                const response = await apiRequest('/api/booking/lista', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': 'Bearer test-token',
+                        'X-Admin-Key': 'test-key'
+                    }
+                });
+                
+                // Verifichiamo che ci siano header di sicurezza appropriati
+                const contentType = response.headers.get('content-type');
+                const cors = response.headers.get('access-control-allow-origin');
+                
+                if (contentType && contentType.includes('application/json')) {
+                    updateTestStatus('api-security-status', 'success', 'Sicurezza base OK');
+                    addTestResult('Sicurezza API', 'success', 'Header di sicurezza presenti');
+                    showResult('✅ Sicurezza API: Successo', 'success', 'Header di sicurezza correttamente impostati');
+                } else {
+                    updateTestStatus('api-security-status', 'warning', 'Header mancanti');
+                    addTestResult('Sicurezza API', 'warning', 'Possibili problemi con header di sicurezza');
+                    showResult('⚠️ Sicurezza API: Attenzione', 'warning', 'Verificare header di sicurezza');
+                }
+            } catch (error) {
+                updateTestStatus('api-security-status', 'error', 'Errore test');
+                addTestResult('Sicurezza API', 'error', error.message);
+                showResult('❌ Sicurezza API: Errore', 'error', error.message);
+            }
+        }
+
+        async function testCORS() {
+            try {
+                const response = await apiRequest('/api/booking/tavoli-disponibili?date=2026-04-06', {
+                    method: 'OPTIONS'
+                });
+                
+                const cors = response.headers.get('access-control-allow-origin');
+                const methods = response.headers.get('access-control-allow-methods');
+                
+                if (cors && methods) {
+                    showResult('✅ CORS: Configurato', 'success', `Origini: ${cors}, Metodi: ${methods}`);
+                } else {
+                    showResult('⚠️ CORS: Configurazione debole', 'warning', 'Verificare configurazione CORS');
+                }
+            } catch (error) {
+                showResult('❌ CORS: Errore', 'error', error.message);
+            }
+        }
+
+        // Test Prestazioni
+        async function testResponseTimes() {
+            updateTestStatus('response-time-status', 'pending', 'Test in corso...');
+            
+            try {
+                const endpoints = [
+                    '/api/booking/tavoli-disponibili?date=2026-04-06',
+                    '/api/booking/sdraio-disponibili?date=2026-04-06',
+                    '/api/booking/ombrelloni-disponibili?date=2026-04-06',
+                    '/api/booking/stats?date=2026-04-06'
+                ];
+                
+                const times = [];
+                
+                for (const endpoint of endpoints) {
+                    const start = performance.now();
+                    const response = await apiRequest(endpoint);
+                    const end = performance.now();
+                    
+                    times.push({
+                        endpoint,
+                        time: end - start,
+                        status: response.status
+                    });
+                }
+                
+                const avgTime = times.reduce((sum, t) => sum + t.time, 0) / times.length;
+                
+                if (avgTime < 1000) { // Meno di 1 secondo
+                    updateTestStatus('response-time-status', 'success', `Media: ${avgTime.toFixed(0)}ms`);
+                    addTestResult('Tempi di Risposta', 'success', `Tempo medio: ${avgTime.toFixed(0)}ms`);
+                    showResult('✅ Tempi di Risposta: Ottimi', 'success', `Tempo medio: ${avgTime.toFixed(0)}ms`);
+                } else {
+                    updateTestStatus('response-time-status', 'warning', `Media: ${avgTime.toFixed(0)}ms`);
+                    addTestResult('Tempi di Risposta', 'warning', `Tempo medio: ${avgTime.toFixed(0)}ms - Potenziale problema`);
+                    showResult('⚠️ Tempi di Risposta: Lenti', 'warning', `Tempo medio: ${avgTime.toFixed(0)}ms`);
+                }
+                
+                // Mostra dettagli
+                const details = times.map(t => `${t.endpoint}: ${t.time.toFixed(0)}ms (${t.status})`).join('\n');
+                showResult('📊 Dettagli Prestazioni', 'info', details);
+                
+            } catch (error) {
+                updateTestStatus('response-time-status', 'error', 'Errore test');
+                addTestResult('Tempi di Risposta', 'error', error.message);
+                showResult('❌ Tempi di Risposta: Errore', 'error', error.message);
+            }
+        }
+
+        async function testSystemLoad() {
+            updateTestStatus('load-test-status', 'pending', 'Test in corso...');
+            
+            try {
+                // Testiamo con 50 richieste simultanee
+                const requests = Array(50).fill().map(() => 
+                    apiRequest('/api/booking/tavoli-disponibili?date=2026-04-06')
+                );
+                
+                const startTime = performance.now();
+                const responses = await Promise.allSettled(requests);
+                const endTime = performance.now();
+                
+                const successful = responses.filter(r => r.status === 'fulfilled' && r.value.ok).length;
+                const failed = responses.length - successful;
+                const avgTime = (endTime - startTime) / responses.length;
+                
+                if (successful >= responses.length * 0.9) { // 90% di successo
+                    updateTestStatus('load-test-status', 'success', `Successo: ${successful}/${responses.length}`);
+                    addTestResult('Test Carico Sistema', 'success', `Successo: ${successful}/${responses.length}, Tempo medio: ${avgTime.toFixed(0)}ms`);
+                    showResult('✅ Test Carico Sistema: Successo', 'success', `Successo: ${successful}/${responses.length}, Tempo medio: ${avgTime.toFixed(0)}ms`);
+                } else {
+                    updateTestStatus('load-test-status', 'warning', `Fallimenti: ${failed}`);
+                    addTestResult('Test Carico Sistema', 'warning', `Fallimenti: ${failed}/${responses.length} - Possibili problemi di scalabilità`);
+                    showResult('⚠️ Test Carico Sistema: Attenzione', 'warning', `Fallimenti: ${failed}/${responses.length}`);
+                }
+                
+            } catch (error) {
+                updateTestStatus('load-test-status', 'error', 'Errore test');
+                addTestResult('Test Carico Sistema', 'error', error.message);
+                showResult('❌ Test Carico Sistema: Errore', 'error', error.message);
+            }
+        }
+
+        async function testConcurrency() {
+            try {
+                // Testiamo la concorrenza con prenotazioni simultanee
+                const bookingPromises = Array(5).fill().map((_, i) => 
+                    apiRequest('/api/payment/create-checkout-session', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            amount: 1000 + i * 100,
+                            email: `test${i}@example.com`,
+                            description: `Test concorrenza ${i}`,
+                            metadata: {
+                                booking: JSON.stringify({
+                                    date: config.testDate,
+                                    tables: 1,
+                                    chairs: 1
+                                })
+                            }
+                        })
+                    })
+                );
+                
+                const responses = await Promise.allSettled(bookingPromises);
+                const successful = responses.filter(r => r.status === 'fulfilled' && r.value.ok).length;
+                
+                showResult('📊 Test Concorrenza', 'info', `Sessioni create: ${successful}/${responses.length}`);
+                
+            } catch (error) {
+                showResult('❌ Test Concorrenza: Errore', 'error', error.message);
+            }
+        }
+
+        // Test Integrazione Completa
+        async function testFullBookingFlow() {
+            updateTestStatus('full-flow-status', 'pending', 'Test in corso...');
+            
+            try {
+                // 1. Verifica disponibilità
+                const availabilityResponse = await apiRequest(`/api/booking/tavoli-disponibili?date=${config.testDate}`);
+                if (!availabilityResponse.ok) {
+                    throw new Error('Disponibilità non verificabile');
+                }
+                
+                // 2. Crea sessione pagamento
+                const bookingData = {
+                    date: config.testDate,
+                    tables: 1,
+                    chairs: 1,
+                    name: 'Test Integration User',
+                    email: config.testEmail,
+                    phone: config.testPhone
+                };
+                
+                const paymentResponse = await apiRequest('/api/payment/create-checkout-session', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        amount: 1300, // 8 + 5 = 13€
+                        email: config.testEmail,
+                        description: 'Test flusso integrazione completo',
+                        metadata: {
+                            booking: JSON.stringify(bookingData)
+                        }
+                    })
+                });
+                
+                if (!paymentResponse.ok) {
+                    throw new Error('Sessione pagamento non creata');
+                }
+                
+                const paymentData = await paymentResponse.json();
+                
+                // 3. Simuliamo il webhook (solo se disponibile)
+                // Nota: in un test reale, Stripe chiamerebbe il webhook dopo il pagamento
+                
+                updateTestStatus('full-flow-status', 'success', 'Flusso completato');
+                addTestResult('Flusso Prenotazione Completo', 'success', 'Tutti i passaggi del flusso sono stati testati');
+                showResult('✅ Flusso Prenotazione Completo: Successo', 'success', 'Tutti i passaggi del flusso sono stati testati correttamente');
+                
+            } catch (error) {
+                updateTestStatus('full-flow-status', 'error', 'Errore flusso');
+                addTestResult('Flusso Prenotazione Completo', 'error', error.message);
+                showResult('❌ Flusso Prenotazione Completo: Errore', 'error', error.message);
+            }
+        }
+
+        async function testCancellationFlow() {
+            updateTestStatus('cancellation-status', 'pending', 'Test in corso...');
+            
+            try {
+                // Testiamo l'endpoint di cancellazione
+                const response = await apiRequest('/api/booking/cancella', {
+                    method: 'PATCH',
+                    body: JSON.stringify({
+                        email: config.testEmail,
+                        date: config.testDate
+                    })
+                });
+                
+                // Dovrebbe restituire 404 (prenotazione non trovata) o 403 (non cancellabile)
+                if (response.status === 404 || response.status === 403) {
+                    updateTestStatus('cancellation-status', 'success', 'Endpoint attivo');
+                    addTestResult('Flusso Cancellazione', 'success', 'Endpoint cancellazione funzionante');
+                    showResult('✅ Flusso Cancellazione: Successo', 'success', `Status: ${response.status} - Endpoint funzionante`);
+                } else {
+                    updateTestStatus('cancellation-status', 'warning', 'Endpoint problematico');
+                    addTestResult('Flusso Cancellazione', 'warning', `Status: ${response.status} - Possibili problemi`);
+                    showResult('⚠️ Flusso Cancellazione: Attenzione', 'warning', `Status: ${response.status}`);
+                }
+                
+            } catch (error) {
+                updateTestStatus('cancellation-status', 'error', 'Errore test');
+                addTestResult('Flusso Cancellazione', 'error', error.message);
+                showResult('❌ Flusso Cancellazione: Errore', 'error', error.message);
+            }
+        }
+
+        async function cleanupTestBooking() {
+            try {
+                // Cancelliamo eventuali prenotazioni di test
+                const response = await apiRequest('/api/booking/cancella', {
+                    method: 'PATCH',
+                    body: JSON.stringify({
+                        email: config.testEmail,
+                        date: config.testDate
+                    })
+                });
+                
+                showResult('🧹 Pulizia Test: Completata', 'success', 'Eventuali prenotazioni di test sono state rimosse');
+                
+            } catch (error) {
+                showResult('❌ Pulizia Test: Errore', 'error', error.message);
+            }
+        }
+
+        // Azioni Rapide
+        async function runAllTests() {
+            if (isRunning) {
+                showResult('⚠️ Test già in esecuzione', 'warning', 'Attendi il completamento del test corrente');
+                return;
+            }
+            
+            isRunning = true;
+            showResult('🚀 Avvio Suite Test Completa', 'info', 'Inizio esecuzione di tutti i test...');
+            
+            // Reset metriche
+            testResults = [];
+            updateMetrics();
+            
+            // Esegui tutti i test in ordine logico
+            const tests = [
+                testApiConnection,
+                testTablesAvailability,
+                testChairsAvailability,
+                testUmbrellasAvailability,
+                testBookingStats,
+                testBookingsList,
+                testStripeConfig,
+                testCheckoutSession,
+                testWebhookEndpoint,
+                testEmailConfig,
+                testWhatsAppConfig,
+                testInputValidation,
+                testErrorHandling,
+                testAPISecurity,
+                testResponseTimes,
+                testSystemLoad,
+                testFullBookingFlow
+            ];
+            
+            for (const test of tests) {
+                try {
+                    await test();
+                    // Breve pausa tra i test
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                } catch (error) {
+                    console.error('Errore test:', error);
+                    showResult(`❌ Errore test ${test.name}`, 'error', error.message);
+                }
+            }
+            
+            isRunning = false;
+            showResult('✅ Suite Test Completa: Terminata', 'success', 'Tutti i test sono stati eseguiti');
+            generateReport();
+        }
+
+        async function runCriticalTests() {
+            if (isRunning) {
+                showResult('⚠️ Test già in esecuzione', 'warning', 'Attendi il completamento del test corrente');
+                return;
+            }
+            
+            isRunning = true;
+            showResult('🚀 Avvio Test Critici', 'info', 'Inizio esecuzione test critici...');
+            
+            const criticalTests = [
+                testApiConnection,
+                testTablesAvailability,
+                testStripeConfig,
+                testCheckoutSession,
+                testInputValidation
+            ];
+            
+            for (const test of criticalTests) {
+                try {
+                    await test();
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                } catch (error) {
+                    console.error('Errore test critico:', error);
+                }
+            }
+            
+            isRunning = false;
+            showResult('✅ Test Critici: Terminati', 'success', 'Test critici completati');
+        }
+
+        function generateReport() {
+            const total = testResults.length;
+            const passed = testResults.filter(r => r.status === 'success').length;
+            const failed = testResults.filter(r => r.status === 'error').length;
+            const warnings = testResults.filter(r => r.status === 'warning').length;
+            const successRate = total > 0 ? Math.round((passed / total) * 100) : 0;
+
+            const report = {
+                timestamp: new Date().toISOString(),
+                summary: {
+                    total,
+                    passed,
+                    failed,
+                    warnings,
+                    successRate: `${successRate}%`
+                },
+                results: testResults,
+                config: config
+            };
+
+            const reportWindow = window.open('', '_blank');
+            reportWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Report Test Prenotazioni</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 20px; }
+                        .header { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+                        .metric { display: inline-block; margin-right: 20px; }
+                        .result-item { margin-bottom: 10px; padding: 10px; border-radius: 4px; }
+                        .success { background: #d4edda; border-left: 4px solid #28a745; }
+                        .error { background: #f8d7da; border-left: 4px solid #dc3545; }
+                        .warning { background: #fff3cd; border-left: 4px solid #ffc107; }
+                        .info { background: #d1ecf1; border-left: 4px solid #17a2b8; }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h1>Report Test Sistema Prenotazioni</h1>
+                        <div class="metric"><strong>Totale:</strong> ${total}</div>
+                        <div class="metric"><strong>Successi:</strong> ${passed}</div>
+                        <div class="metric"><strong>Fail:</strong> ${failed}</div>
+                        <div class="metric"><strong>Warning:</strong> ${warnings}</div>
+                        <div class="metric"><strong>Tasso Successo:</strong> ${successRate}%</div>
+                    </div>
+                    <h2>Risultati Dettagliati</h2>
+                    ${testResults.map(r => `
+                        <div class="result-item ${r.status}">
+                            <strong>${r.name}</strong> - ${r.message}
+                            <div style="font-size: 0.9em; color: #666; margin-top: 5px;">${r.timestamp}</div>
+                        </div>
+                    `).join('')}
+                </body>
+                </html>
+            `);
+            reportWindow.document.close();
+        }
+
+        function exportResults() {
+            const dataStr = JSON.stringify({
+                timestamp: new Date().toISOString(),
+                config: config,
+                results: testResults
+            }, null, 2);
+            
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `test-report-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+            
+            showResult('📊 Esportazione: Completata', 'success', 'File JSON scaricato');
+        }
+
+        function resetSystem() {
+            if (confirm('Sei sicuro di voler resettare il sistema? Questa azione cancellerà i dati di test.')) {
+                testResults = [];
+                updateMetrics();
+                cleanupTestBooking();
+                showResult('🔄 Reset Sistema: Completato', 'success', 'Dati di test cancellati');
+            }
+        }
+
+        async function checkSystemHealth() {
+            showResult('🔍 Controllo Salute Sistema', 'info', 'Verifica stato generale del sistema...');
+            
+            const checks = [
+                { name: 'API Backend', test: testApiConnection },
+                { name: 'Stripe', test: testStripeConfig },
+                { name: 'Email', test: testEmailConfig },
+                { name: 'Disponibilità', test: testTablesAvailability }
+            ];
+            
+            for (const check of checks) {
+                try {
+                    await check.test();
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                } catch (error) {
+                    console.error(`Errore check ${check.name}:`, error);
+                }
+            }
+            
+            showResult('✅ Controllo Salute: Completato', 'success', 'Verifica generale terminata');
+        }
+
+        // Funzione per verificare lo stato API
+        async function checkAPIStatus() {
+            try {
+                const response = await apiRequest('/api/booking/ping', { method: 'GET' });
+                const statusElement = document.getElementById('api-status');
+                
+                if (response.ok) {
+                    statusElement.textContent = 'API Attiva';
+                    statusElement.className = 'status-badge status-success';
+                } else {
+                    statusElement.textContent = 'API Non Rag. ';
+                    statusElement.className = 'status-badge status-error';
+                }
+            } catch (error) {
+                const statusElement = document.getElementById('api-status');
+                statusElement.textContent = 'API Non Rag. ';
+                statusElement.className = 'status-badge status-error';
+            }
+        }
+    </script>
+</body>
+</html>

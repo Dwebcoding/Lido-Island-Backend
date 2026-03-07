@@ -26,20 +26,54 @@ app.post('/api/payment/webhook', express.raw({ type: 'application/json' }), (req
 
 // Ora applico i middleware per tutte le altre route
 const corsOptions = {
-	origin: [
-		'https://www.isolalido.it',
-		'https://isolalido.it',
-		'http://localhost:5500',
-		'http://127.0.0.1:5500',
-		'http://localhost:3000',
-		'http://127.0.0.1:3000'
+	origin: function (origin, callback) {
+		// Lista domini consentiti
+		const allowedOrigins = [
+			'https://www.isolalido.it',
+			'https://isolalido.it',
+			'http://localhost:5500',
+			'http://127.0.0.1:5500',
+			'http://localhost:3000',
+			'http://127.0.0.1:3000'
+		];
+		
+		// Consentire richieste senza origine (come mobile apps o curl)
+		if (!origin) return callback(null, true);
+		
+		if (allowedOrigins.indexOf(origin) !== -1) {
+			callback(null, true);
+		} else {
+			console.warn('[CORS] Origine non consentita:', origin);
+			callback(new Error('Not allowed by CORS'));
+		}
+	},
+	methods: ['GET', 'POST', 'PATCH', 'OPTIONS', 'PUT', 'DELETE'],
+	allowedHeaders: [
+		'Content-Type', 
+		'Authorization', 
+		'x-admin-key',
+		'X-Requested-With',
+		'Accept',
+		'Origin'
 	],
-	methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
-	allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key'],
-	preflightContinue: false
+	credentials: true, // Consente l'invio di cookie e credenziali
+	optionsSuccessStatus: 200, // Per compatibilità con vecchi browser
+	preflightContinue: false,
+	maxAge: 86400 // Cache preflight per 24 ore
 };
-app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
+
+// Middleware CORS specifico per tutti gli endpoint
+app.use((req, res, next) => {
+	// Applica CORS a tutte le rotte tranne webhook
+	if (!req.originalUrl.startsWith('/api/payment/webhook')) {
+		cors(corsOptions)(req, res, next);
+	} else {
+		next();
+	}
+});
+
+// Le richieste OPTIONS sono gestite automaticamente dal middleware CORS
+// Non è necessario un gestore esplicito per tutte le rotte
 
 // Parser JSON globale, ma salta il webhook Stripe per evitare qualunque
 // alterazione del corpo che invaliderebbe la firma.
@@ -68,6 +102,26 @@ mongoose.connect(MONGO_URI)
 // ...server setup...
 import bookingRoutes from './routes/booking.js';
 bookingRoutes(app);
+
+// Endpoint ping per test connettività
+app.get('/api/booking/ping', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    version: '1.0.0'
+  });
+});
+
+// Endpoint health check generale
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
 // ...existing code...
 // (RIMOSSO) Tutte le altre route payment
 // app.use('/api/payment', stripeRouter);

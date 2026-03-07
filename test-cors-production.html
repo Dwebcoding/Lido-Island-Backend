@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test CORS Produzione</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .result { margin: 10px 0; padding: 10px; border-radius: 4px; }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Test CORS Produzione</h1>
+    <p>Questo test verifica che le richieste CORS al backend in produzione funzionino correttamente.</p>
+    
+    <div id="results"></div>
+    
+    <button onclick="testPing()">Test Ping</button>
+    <button onclick="testTavoliDisponibili()">Test Tavoli Disponibili</button>
+    <button onclick="testSdraioDisponibili()">Test Sdraio Disponibili</button>
+    <button onclick="testOmbrelloniDisponibili()">Test Ombrelloni Disponibili</button>
+    <button onclick="testTavoliOccupati()">Test Tavoli Occupati</button>
+    <button onclick="testAll()">Test Tutto</button>
+    
+    <script>
+        const API_BASE = 'https://api.isolalido.it';
+        const resultsDiv = document.getElementById('results');
+        
+        function addResult(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.textContent = message;
+            resultsDiv.appendChild(div);
+            console.log(message);
+        }
+        
+        async function testEndpoint(endpoint, description) {
+            try {
+                addResult(`Testing ${description}...`, 'info');
+                const response = await fetch(`${API_BASE}${endpoint}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Origin': 'http://localhost:3000'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult(`${description}: SUCCESS - ${JSON.stringify(data)}`, 'success');
+                    return true;
+                } else {
+                    addResult(`${description}: ERROR - Status ${response.status}`, 'error');
+                    return false;
+                }
+            } catch (error) {
+                addResult(`${description}: ERROR - ${error.message}`, 'error');
+                return false;
+            }
+        }
+        
+        async function testPing() {
+            await testEndpoint('/api/ping', 'Ping');
+        }
+        
+        async function testTavoliDisponibili() {
+            await testEndpoint('/api/booking/tavoli-disponibili?date=2026-04-05', 'Tavoli Disponibili');
+        }
+        
+        async function testSdraioDisponibili() {
+            await testEndpoint('/api/booking/sdraio-disponibili?date=2026-04-05', 'Sdraio Disponibili');
+        }
+        
+        async function testOmbrelloniDisponibili() {
+            await testEndpoint('/api/booking/ombrelloni-disponibili?date=2026-04-05', 'Ombrelloni Disponibili');
+        }
+        
+        async function testTavoliOccupati() {
+            await testEndpoint('/api/booking/tavoli-occupati?date=2026-04-05', 'Tavoli Occupati');
+        }
+        
+        async function testAll() {
+            resultsDiv.innerHTML = '';
+            addResult('Inizio test CORS completo...', 'info');
+            
+            const tests = [
+                { endpoint: '/api/ping', description: 'Ping' },
+                { endpoint: '/api/booking/tavoli-disponibili?date=2026-04-05', description: 'Tavoli Disponibili' },
+                { endpoint: '/api/booking/sdraio-disponibili?date=2026-04-05', description: 'Sdraio Disponibili' },
+                { endpoint: '/api/booking/ombrelloni-disponibili?date=2026-04-05', description: 'Ombrelloni Disponibili' },
+                { endpoint: '/api/booking/tavoli-occupati?date=2026-04-05', description: 'Tavoli Occupati' }
+            ];
+            
+            let successCount = 0;
+            for (const test of tests) {
+                const success = await testEndpoint(test.endpoint, test.description);
+                if (success) successCount++;
+            }
+            
+            addResult(`Test completi: ${successCount}/${tests.length} riusciti`, successCount === tests.length ? 'success' : 'error');
+        }
+    </script>
+</body>
+</html>

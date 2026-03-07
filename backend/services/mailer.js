@@ -3,6 +3,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
+import { getWhatsAppService } from './whatsapp.js';
+
 let twilioClient = null;
 // Initialize optional Twilio client lazily without top-level await
 const twilioInitPromise = (async () => {
@@ -115,6 +117,16 @@ export default {
         html,
       });
       console.log('[MAILER] Owner notification sent:', info.messageId || info);
+      
+      // Invia WhatsApp al proprietario
+      try {
+        const whatsapp = getWhatsAppService();
+        const whatsappResult = await whatsapp.sendOwnerNotification(booking, amount);
+        console.log('[WHATSAPP] Notifica proprietario:', whatsappResult ? 'OK' : 'KO');
+      } catch (whatsappErr) {
+        console.warn('[WHATSAPP] WhatsApp owner notification failed:', whatsappErr);
+      }
+
       // Optionally send a confirmation to the customer
       if (notifyCustomer) {
         try {
@@ -123,6 +135,18 @@ export default {
           }
         } catch (e) {
           console.warn('[MAILER] sendCustomerConfirmation failed:', e);
+        }
+        
+        // Invia WhatsApp al cliente
+        if (booking.phone) {
+          try {
+            const whatsapp = getWhatsAppService();
+            const customerPhone = booking.phone.replace(/\D/g, '');
+            const whatsappResult = await whatsapp.sendCustomerConfirmation(customerPhone, booking, amount);
+            console.log('[WHATSAPP] Conferma cliente:', whatsappResult ? 'OK' : 'KO');
+          } catch (e) {
+            console.warn('[MAILER] Customer WhatsApp notification failed:', e);
+          }
         }
       }
 

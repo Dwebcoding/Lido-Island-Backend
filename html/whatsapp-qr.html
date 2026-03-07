@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp QR Code - Isola Lido</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .qr-container { text-align: center; margin: 20px 0; }
+        #qr-code { width: 300px; height: 300px; border: 1px solid #ccc; padding: 10px; }
+        .status { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .instructions { background-color: #e9ecef; padding: 15px; border-radius: 8px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>WhatsApp QR Code</h1>
+    <p>Scansiona il QR Code con WhatsApp per connettere il bot</p>
+    
+    <div class="instructions">
+        <h3>Istruzioni:</h3>
+        <ol>
+            <li>Apri WhatsApp sul tuo telefono</li>
+            <li>Vai su Impostazioni > Dispositivi Collegati</li>
+            <li>Scansiona il QR Code qui sotto</li>
+            <li>Il bot sarà connesso e pronto per inviare messaggi</li>
+        </ol>
+    </div>
+    
+    <div id="status" class="status disconnected">Stato: Disconnesso</div>
+    
+    <div class="qr-container">
+        <div id="qr-code">Caricamento QR Code...</div>
+    </div>
+    
+    <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px;">
+        <h3>Note importanti:</h3>
+        <ul>
+            <li>Il QR Code viene generato automaticamente dal server</li>
+            <li>La connessione è persistente e non richiede QR Code ogni volta</li>
+            <li>Conserva la cartella "whatsapp-session" in modo sicuro</li>
+            <li>Il numero WhatsApp deve essere personale (non business)</li>
+        </ul>
+    </div>
+    
+    <script>
+        // WebSocket per ricevere il QR Code in tempo reale
+        const ws = new WebSocket('ws://localhost:3001');
+        
+        ws.onopen = () => {
+            document.getElementById('status').textContent = 'Stato: In attesa QR Code';
+            document.getElementById('status').className = 'status disconnected';
+        };
+        
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'qr') {
+                document.getElementById('qr-code').innerHTML = `<img src="${data.qr}" alt="QR Code" style="max-width: 100%; height: auto;">`;
+                document.getElementById('status').textContent = 'Stato: Scansiona il QR Code';
+                document.getElementById('status').className = 'status disconnected';
+            } else if (data.type === 'connected') {
+                document.getElementById('status').textContent = 'Stato: Connesso!';
+                document.getElementById('status').className = 'status connected';
+                document.getElementById('qr-code').innerHTML = '✅ Connessione WhatsApp stabilita!';
+            } else if (data.type === 'error') {
+                document.getElementById('status').textContent = 'Stato: Errore - ' + data.message;
+                document.getElementById('status').className = 'status disconnected';
+            }
+        };
+        
+        ws.onclose = () => {
+            document.getElementById('status').textContent = 'Stato: WebSocket chiuso';
+            document.getElementById('status').className = 'status disconnected';
+        };
+        
+        ws.onerror = () => {
+            document.getElementById('status').textContent = 'Stato: Errore WebSocket';
+            document.getElementById('status').className = 'status disconnected';
+        };
+    </script>
+</body>
+</html>

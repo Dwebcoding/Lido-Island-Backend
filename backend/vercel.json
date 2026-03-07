@@ -8,6 +8,8 @@
   "routes": [
     { "src": "/api/ping", "methods": ["GET"], "dest": "/api/ping.mjs" },
     { "src": "/api/payment/create-checkout-session", "methods": ["POST", "OPTIONS"], "dest": "/api/payment/create-checkout-session.mjs" },
+    { "src": "/api/payment/webhook", "methods": ["POST"], "dest": "/api/server.js" },
+    { "src": "/api/booking/(.*)", "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], "dest": "/api/server.js" },
     { "src": "/api/(.*)", "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], "dest": "/api/server.js" }
   ]
 }

@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Integrato - Lido Island</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-left: 4px solid #007bff;
+        }
+        .success { border-left-color: #28a745; background: #d4edda; }
+        .error { border-left-color: #dc3545; background: #f8d7da; }
+        .warning { border-left-color: #ffc107; background: #fff3cd; }
+        .info { border-left-color: #17a2b8; background: #d1ecf1; }
+        .btn {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover { background: #0056b3; }
+        .btn:disabled { background: #6c757d; cursor: not-allowed; }
+        .result {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .metric {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .step {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test Integrato - Lido Island</h1>
+    <p>Test completo del sistema di prenotazioni, pagamenti e notifiche.</p>
+    
+    <div class="metrics">
+        <div class="metric">
+            <div id="api-status">⚪ Non testato</div>
+            <small>API Status</small>
+        </div>
+        <div class="metric">
+            <div id="cors-status">⚪ Non testato</div>
+            <small>CORS Status</small>
+        </div>
+        <div class="metric">
+            <div id="stripe-status">⚪ Non testato</div>
+            <small>Stripe Status</small>
+        </div>
+        <div class="metric">
+            <div id="booking-status">⚪ Non testato</div>
+            <small>Booking Status</small>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>1. Test Connessione API</h3>
+        <p>Verifica che il backend sia raggiungibile.</p>
+        <button class="btn" onclick="testAPIConnection()">Test Connessione</button>
+        <div id="api-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>2. Test Disponibilità</h3>
+        <p>Verifica la disponibilità tavoli/sdraio/ombrelloni.</p>
+        <button class="btn" onclick="testAvailability()">Test Disponibilità</button>
+        <div id="availability-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>3. Test Stripe Checkout</h3>
+        <p>Verifica la creazione della sessione di pagamento.</p>
+        <button class="btn" onclick="testStripeCheckout()">Test Stripe</button>
+        <div id="stripe-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>4. Test Completo (Simulazione Prenotazione)</h3>
+        <p>Simula un flusso di prenotazione completo.</p>
+        <button class="btn" onclick="runFullTest()">Test Completo</button>
+        <div id="full-test-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>5. Test CORS Headers</h3>
+        <p>Verifica che gli header CORS siano correttamente impostati.</p>
+        <button class="btn" onclick="testCORSHeaders()">Test CORS Headers</button>
+        <div id="cors-result" class="result"></div>
+    </div>
+
+    <script>
+        // Configurazione
+        const API_BASE = 'http://localhost:3000';
+        const TEST_DATE = '2026-04-06';
+        const TEST_EMAIL = 'test@example.com';
+
+        async function apiRequest(endpoint, options = {}) {
+            const url = `${API_BASE}${endpoint}`;
+            const defaultOptions = {
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                timeout: 10000
+            };
+            
+            const requestOptions = { ...defaultOptions, ...options };
+            
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), requestOptions.timeout);
+                
+                const response = await fetch(url, {
+                    ...requestOptions,
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                return response;
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    throw new Error('Timeout: La richiesta ha superato il tempo massimo di attesa');
+                }
+                throw error;
+            }
+        }
+
+        function updateStatus(elementId, status, message) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.innerHTML = status + ' ' + message;
+                element.className = status === '✅' ? 'success' : 
+                                   status === '❌' ? 'error' : 
+                                   status === '⚠️' ? 'warning' : 'info';
+            }
+        }
+
+        function showResult(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.textContent = message;
+                element.className = 'result ' + (type === 'success' ? 'success' : type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'info');
+            }
+        }
+
+        // Test 1: Connessione API
+        async function testAPIConnection() {
+            updateStatus('api-status', '🔄', 'Test in corso...');
+            showResult('api-result', 'Test connessione API in corso...', 'info');
+            
+            try {
+                const response = await apiRequest('/api/booking/tavoli-disponibili?date=' + TEST_DATE, { method: 'GET' });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    updateStatus('api-status', '✅', 'API Attiva');
+                    showResult('api-result', 
+                        `✅ Connessione API: Successo\n` +
+                        `Status: ${response.status}\n` +
+                        `Data: ${JSON.stringify(data)}`, 'success');
+                } else {
+                    updateStatus('api-status', '❌', 'API Non Raggiungibile');
+                    showResult('api-result', 
+                        `❌ Connessione API: Fallito\n` +
+                        `Status: ${response.status}\n` +
+                        `Status Text: ${response.statusText}`, 'error');
+                }
+            } catch (error) {
+                updateStatus('api-status', '❌', 'Errore Connessione');
+                showResult('api-result', 
+                    `❌ Connessione API: Errore\n` +
+                    `Errore: ${error.message}`, 'error');
+            }
+        }
+
+        // Test 2: Disponibilità
+        async function testAvailability() {
+            updateStatus('cors-status', '🔄', 'Test Disponibilità in corso...');
+            showResult('availability-result', 'Test disponibilità in corso...', 'info');
+            
+            try {
+                const endpoints = [
+                    { name: 'Tavoli', endpoint: `/api/booking/tavoli-disponibili?date=${TEST_DATE}` },
+                    { name: 'Sdraio', endpoint: `/api/booking/sdraio-disponibili?date=${TEST_DATE}` },
+                    { name: 'Ombrelloni', endpoint: `/api/booking/ombrelloni-disponibili?date=${TEST_DATE}` }
+                ];
+
+                let results = [];
+                let allSuccess = true;
+
+                for (const endpoint of endpoints) {
+                    try {
+                        const response = await apiRequest(endpoint.endpoint, { method: 'GET' });
+                        if (response.ok) {
+                            const data = await response.json();
+                            results.push(`✅ ${endpoint.name}: ${JSON.stringify(data)}`);
+                        } else {
+                            results.push(`❌ ${endpoint.name}: Status ${response.status}`);
+                            allSuccess = false;
+                        }
+                    } catch (error) {
+                        results.push(`❌ ${endpoint.name}: Errore - ${error.message}`);
+                        allSuccess = false;
+                    }
+                }
+
+                if (allSuccess) {
+                    updateStatus('cors-status', '✅', 'Disponibilità OK');
+                    showResult('availability-result', 
+                        `✅ Test Disponibilità: Successo\n\n` +
+                        results.join('\n\n'), 'success');
+                } else {
+                    updateStatus('cors-status', '⚠️', 'Problemi Disponibilità');
+                    showResult('availability-result', 
+                        `⚠️ Test Disponibilità: Alcuni problemi\n\n` +
+                        results.join('\n\n'), 'warning');
+                }
+            } catch (error) {
+                updateStatus('cors-status', '❌', 'Errore Disponibilità');
+                showResult('availability-result', 
+                    `❌ Test Disponibilità: Errore\n` +
+                    `Errore: ${error.message}`, 'error');
+            }
+        }
+
+        // Test 3: Stripe Checkout
+        async function testStripeCheckout() {
+            updateStatus('stripe-status', '🔄', 'Test Stripe in corso...');
+            showResult('stripe-result', 'Test configurazione Stripe in corso...', 'info');
+            
+            try {
+                const response = await apiRequest('/api/payment/create-checkout-session', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        amount: 3600, // 36.00 EUR
+                        email: TEST_EMAIL,
+                        description: 'Test prenotazione tavolo',
+                        metadata: {
+                            booking: JSON.stringify({
+                                date: TEST_DATE,
+                                tables: 2,
+                                chairs: 4,
+                                name: 'Test Customer',
+                                phone: '+393331234567',
+                                notes: 'Test booking integrato'
+                            })
+                        }
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.url) {
+                        updateStatus('stripe-status', '✅', 'Stripe OK');
+                        showResult('stripe-result', 
+                            `✅ Test Stripe: Successo\n` +
+                            `Sessione creata correttamente\n` +
+                            `URL: ${data.url}\n\n` +
+                            `Per completare il test:\n` +
+                            `1. Apri l'URL sopra in un browser\n` +
+                            `2. Completa il pagamento con carta di test Stripe\n` +
+                            `3. Verifica che la prenotazione venga salvata nel database\n` +
+                            `4. Controlla che le email di notifica vengano inviate`, 'success');
+                    } else {
+                        updateStatus('stripe-status', '⚠️', 'Stripe Disabilitato');
+                        showResult('stripe-result', 
+                            `⚠️ Test Stripe: Disabilitato\n` +
+                            `Messaggio: ${data.error || 'Stripe non configurato'}`, 'warning');
+                    }
+                } else {
+                    updateStatus('stripe-status', '❌', 'Errore Stripe');
+                    showResult('stripe-result', 
+                        `❌ Test Stripe: Errore\n` +
+                        `Status: ${response.status}\n` +
+                        `Status Text: ${response.statusText}`, 'error');
+                }
+            } catch (error) {
+                updateStatus('stripe-status', '❌', 'Errore Stripe');
+                showResult('stripe-result', 
+                    `❌ Test Stripe: Errore\n` +
+                    `Errore: ${error.message}`, 'error');
+            }
+        }
+
+        // Test 4: CORS Headers
+        async function testCORSHeaders() {
+            updateStatus('cors-status', '🔄', 'Test CORS in corso...');
+            showResult('cors-result', 'Test CORS headers in corso...', 'info');
+            
+            try {
+                const response = await apiRequest(`/api/booking/tavoli-disponibili?date=${TEST_DATE}`, { method: 'GET' });
+
+                let corsIssues = [];
+                let corsSuccess = [];
+
+                // Controlliamo gli header CORS
+                const corsHeaders = {
+                    'access-control-allow-origin': response.headers.get('access-control-allow-origin'),
+                    'access-control-allow-methods': response.headers.get('access-control-allow-methods'),
+                    'access-control-allow-headers': response.headers.get('access-control-allow-headers'),
+                    'access-control-allow-credentials': response.headers.get('access-control-allow-credentials')
+                };
+
+                if (corsHeaders['access-control-allow-origin']) {
+                    corsSuccess.push(`✅ Origin consentito: ${corsHeaders['access-control-allow-origin']}`);
+                } else {
+                    corsIssues.push('❌ Header Access-Control-Allow-Origin mancante');
+                }
+
+                if (corsHeaders['access-control-allow-methods']) {
+                    corsSuccess.push(`✅ Metodi consentiti: ${corsHeaders['access-control-allow-methods']}`);
+                } else {
+                    corsIssues.push('❌ Header Access-Control-Allow-Methods mancante');
+                }
+
+                if (corsHeaders['access-control-allow-headers']) {
+                    corsSuccess.push(`✅ Headers consentiti: ${corsHeaders['access-control-allow-headers']}`);
+                } else {
+                    corsIssues.push('❌ Header Access-Control-Allow-Headers mancante');
+                }
+
+                if (corsHeaders['access-control-allow-credentials']) {
+                    corsSuccess.push(`✅ Credenziali consentite: ${corsHeaders['access-control-allow-credentials']}`);
+                }
+
+                // Risultato finale
+                if (corsIssues.length === 0) {
+                    updateStatus('cors-status', '✅', 'CORS OK');
+                    showResult('cors-result', 
+                        `✅ Test CORS: Successo\n\n` +
+                        `Header CORS verificati:\n` +
+                        corsSuccess.join('\n') +
+                        `\n\nRisposta GET:\nStatus: ${response.status}`, 'success');
+                } else {
+                    updateStatus('cors-status', '❌', 'Problemi CORS');
+                    showResult('cors-result', 
+                        `❌ Test CORS: Problemi rilevati\n\n` +
+                        `Problemi:\n` +
+                        corsIssues.join('\n') +
+                        `\n\nHeader trovati:\n` +
+                        Object.entries(corsHeaders).map(([key, value]) => `${key}: ${value || 'mancante'}`).join('\n') +
+                        `\n\nRisposta GET:\nStatus: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                updateStatus('cors-status', '❌', 'Errore Test CORS');
+                showResult('cors-result', 
+                    `❌ Test CORS: Errore\n` +
+                    `Errore: ${error.message}`, 'error');
+            }
+        }
+
+        // Test 5: Test Completo
+        async function runFullTest() {
+            showResult('full-test-result', 'Esecuzione test completo...', 'info');
+            
+            let testResults = [];
+            
+            // Step 1: Test connessione
+            testResults.push('🔄 Step 1: Test connessione API...');
+            await testAPIConnection();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Step 2: Test disponibilità
+            testResults.push('🔄 Step 2: Test disponibilità...');
+            await testAvailability();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Step 3: Test CORS
+            testResults.push('🔄 Step 3: Test CORS headers...');
+            await testCORSHeaders();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Step 4: Test Stripe
+            testResults.push('🔄 Step 4: Test Stripe checkout...');
+            await testStripeCheckout();
+            
+            testResults.push('\n✅ Test completo terminato!');
+            testResults.push('\nRisultati:');
+            testResults.push('- API: Verificare lo stato sopra');
+            testResults.push('- Disponibilità: Verificare lo stato sopra');
+            testResults.push('- CORS: Verificare lo stato sopra');
+            testResults.push('- Stripe: Verificare lo stato sopra');
+            
+            showResult('full-test-result', testResults.join('\n'), 'success');
+        }
+    </script>
+</body>
+</html>

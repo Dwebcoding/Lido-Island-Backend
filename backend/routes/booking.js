@@ -3,9 +3,10 @@ import express from 'express';
 import Stripe from 'stripe';
 import Booking from '../models/booking.js';
 import Donation from '../models/donation.js';
+import mailer from '../services/mailer.js';
 
 const router = express.Router();
-const TAVOLI_TOTALI = 121;
+const TAVOLI_TOTALI = 110;
 const SDRAIO_TOTALI = 65;
 const OMBRELLONI_TOTALI = 65;
 
@@ -303,12 +304,19 @@ router.post('/sync-stripe', async (req, res) => {
           }
         }
 
-        await Booking.findOneAndUpdate(
+        const bookingDoc = await Booking.findOneAndUpdate(
           { paymentId: payload.paymentId },
           { $set: payload },
           { upsert: true, new: true, setDefaultsOnInsert: true }
         );
         bookingsUpserted++;
+
+        // Invia email di notifica al proprietario e conferma al cliente
+        try {
+          await mailer.sendOwnerNotification({ booking: bookingDoc, amount: payload.amount, notifyCustomer: true });
+        } catch (mailErr) {
+          console.warn('[Booking] Email notification failed during sync:', mailErr);
+        }
       } else {
         const donationPayload = {
           donorName: metadata.donation_name || '',
