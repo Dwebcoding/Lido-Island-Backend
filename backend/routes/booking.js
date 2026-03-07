@@ -55,6 +55,24 @@ function getDonationSort(sortByRaw) {
   return { paidAt: -1, createdAt: -1, _id: -1 };
 }
 
+function buildBookingNotes(notes, tableNumbers) {
+  const normalizedNotes = String(notes || '').trim();
+  const normalizedTableNumbers = Array.isArray(tableNumbers)
+    ? tableNumbers
+      .map((n) => Number(n))
+      .filter((n) => Number.isInteger(n) && n >= 1 && n <= TAVOLI_TOTALI)
+      .sort((left, right) => left - right)
+    : [];
+
+  if (!normalizedTableNumbers.length) return normalizedNotes;
+
+  const tablesLine = `Tavoli: ${normalizedTableNumbers.join(', ')}`;
+  if (!normalizedNotes) return tablesLine;
+  if (/tavoli\s*:/i.test(normalizedNotes)) return normalizedNotes;
+
+  return `${normalizedNotes}\n${tablesLine}`;
+}
+
 // Cancellazione prenotazione gratuita fino a 48h prima
 router.patch('/cancella', async (req, res) => {
   try {
@@ -107,7 +125,7 @@ router.get('/lista', async (req, res) => {
         name: b.name || '',
         email: b.email || '',
         phone: b.phone || '',
-        notes: b.notes || '',
+        notes: buildBookingNotes(b.notes, b.tableNumbers),
         tables: b.tables || 0,
         tableNumbers: Array.isArray(b.tableNumbers) ? b.tableNumbers : [],
         chairs: b.chairs || 0,

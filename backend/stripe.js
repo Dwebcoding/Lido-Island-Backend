@@ -5,7 +5,7 @@ import Donation from './models/donation.js';
 import mailer from './services/mailer.js';
 
 const router = express.Router();
-const TAVOLI_TOTALI = 121;
+const TAVOLI_TOTALI = 110;
 
 // Chiave Stripe da env (senza fallback hardcoded)
 const stripeSecret = (process.env.STRIPE_SECRET_KEY || '').trim();
@@ -37,6 +37,24 @@ function parseBookingMetadata(rawBooking) {
   } catch (_error) {
     return {};
   }
+}
+
+function buildBookingNotes(notes, tableNumbers) {
+  const normalizedNotes = String(notes || '').trim();
+  const normalizedTableNumbers = Array.isArray(tableNumbers)
+    ? tableNumbers
+      .map((n) => Number(n))
+      .filter((n) => Number.isInteger(n) && n >= 1 && n <= TAVOLI_TOTALI)
+      .sort((left, right) => left - right)
+    : [];
+
+  if (!normalizedTableNumbers.length) return normalizedNotes;
+
+  const tablesLine = `Tavoli: ${normalizedTableNumbers.join(', ')}`;
+  if (!normalizedNotes) return tablesLine;
+  if (/tavoli\s*:/i.test(normalizedNotes)) return normalizedNotes;
+
+  return `${normalizedNotes}\n${tablesLine}`;
 }
 
 async function findTableConflict(date, tableNumbers) {
@@ -127,14 +145,14 @@ router.post('/webhook', async (req, res) => {
       try {
         const metadata = session?.metadata || {};
         const incomingTableNumbers = Array.isArray(bookingData.tableNumbers)
-          ? bookingData.tableNumbers.map((n) => Number(n)).filter((n) => Number.isInteger(n) && n >= 1 && n <= 121)
+          ? bookingData.tableNumbers.map((n) => Number(n)).filter((n) => Number.isInteger(n) && n >= 1 && n <= TAVOLI_TOTALI)
           : [];
         const normalizedBooking = {
           bookingId: bookingData.id || bookingData.bookingId || `ISOLA-${Date.now()}-${String(session.id || '').slice(-8).toUpperCase()}`,
           date: bookingData.date || '',
           name: bookingData.name || '',
           phone: bookingData.phone || '',
-          notes: bookingData.notes || '',
+          notes: buildBookingNotes(bookingData.notes, incomingTableNumbers),
           tables: incomingTableNumbers.length > 0
             ? incomingTableNumbers.length
             : (Number.isFinite(Number(bookingData.tables)) ? Number(bookingData.tables) : 0),
