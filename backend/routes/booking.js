@@ -10,6 +10,21 @@ const TAVOLI_TOTALI = 110;
 const SDRAIO_TOTALI = 65;
 const OMBRELLONI_TOTALI = 65;
 
+function requireAdminAccess(req, res, next) {
+  const configuredAdminKey = String(process.env.BOOKING_ADMIN_KEY || '').trim();
+  if (!configuredAdminKey) {
+    console.error('[Booking] BOOKING_ADMIN_KEY mancante');
+    return res.status(503).json({ error: 'Area amministrativa non configurata' });
+  }
+
+  const providedAdminKey = String(req.get('x-admin-key') || '').trim();
+  if (!providedAdminKey || providedAdminKey !== configuredAdminKey) {
+    return res.status(401).json({ error: 'Accesso non autorizzato' });
+  }
+
+  return next();
+}
+
 function toInt(value, fallback) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -99,7 +114,7 @@ router.patch('/cancella', async (req, res) => {
 });
 
 // Lista prenotazioni per gestionale
-router.get('/lista', async (req, res) => {
+router.get('/lista', requireAdminAccess, async (req, res) => {
   try {
     const date = String(req.query.date || '').trim();
     const status = String(req.query.status || '').trim();
@@ -146,7 +161,7 @@ router.get('/lista', async (req, res) => {
 });
 
 // Riepilogo quantitativi prenotati per data
-router.get('/stats', async (req, res) => {
+router.get('/stats', requireAdminAccess, async (req, res) => {
   try {
     const date = String(req.query.date || '').trim();
     const match = {
@@ -194,7 +209,7 @@ router.get('/stats', async (req, res) => {
 });
 
 // Lista donazioni per gestionale
-router.get('/donazioni', async (req, res) => {
+router.get('/donazioni', requireAdminAccess, async (req, res) => {
   try {
     const date = String(req.query.date || '').trim();
     const limit = Math.min(Math.max(toInt(req.query.limit, 100), 1), 500);
@@ -228,7 +243,7 @@ router.get('/donazioni', async (req, res) => {
 });
 
 // Riepilogo donazioni
-router.get('/donazioni-stats', async (req, res) => {
+router.get('/donazioni-stats', requireAdminAccess, async (req, res) => {
   try {
     const date = String(req.query.date || '').trim();
     const match = date
@@ -257,7 +272,7 @@ router.get('/donazioni-stats', async (req, res) => {
 });
 
 // Sync forzato da Stripe -> DB (prenotazioni + donazioni)
-router.post('/sync-stripe', async (req, res) => {
+router.post('/sync-stripe', requireAdminAccess, async (req, res) => {
   try {
     const stripeSecret = (process.env.STRIPE_SECRET_KEY || '').trim();
     if (!stripeSecret) return res.status(503).json({ error: 'STRIPE_SECRET_KEY mancante' });
