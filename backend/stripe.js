@@ -6,6 +6,8 @@ import mailer from './services/mailer.js';
 
 const router = express.Router();
 const TAVOLI_TOTALI = 110;
+const PARTIAL_REFUND_STATUS = 'partially_refunded';
+const FULL_REFUND_STATUS = 'refunded';
 
 // Chiave Stripe da env (senza fallback hardcoded)
 const stripeSecret = (process.env.STRIPE_SECRET_KEY || '').trim();
@@ -68,6 +70,105 @@ async function findTableConflict(date, tableNumbers) {
     date,
     tableNumbers: { $in: numbers }
   }).lean();
+}
+
+function getStringValue(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+async function resolvePaymentIntentId(stripeObject) {
+  const directId = getStringValue(stripeObject?.id);
+  const nestedPaymentIntentId = getStringValue(stripeObject?.payment_intent || stripeObject?.paymentIntent);
+  if (nestedPaymentIntentId.startsWith('pi_')) return nestedPaymentIntentId;
+  if (directId.startsWith('pi_')) return directId;
+
+  const chargeId = getStringValue(stripeObject?.charge || (directId.startsWith('ch_') ? directId : ''));
+  if (!chargeId || !stripe) return '';
+
+  try {
+    const charge = await stripe.charges.retrieve(chargeId);
+    return getStringValue(charge?.payment_intent);
+  } catch (error) {
+    console.warn('[Stripe Webhook] impossibile risalire al payment_intent dal charge:', error?.message || error);
+    return '';
+  }
+}
+
+async function resolveCheckoutSessionIds(stripeObject) {
+  const sessionIds = new Set();
+  const directId = getStringValue(stripeObject?.id);
+  if (directId.startsWith('cs_')) sessionIds.add(directId);
+
+  const embeddedSessionId = getStringValue(
+    stripeObject?.checkout_session
+    || stripeObject?.checkoutSession
+    || stripeObject?.metadata?.checkout_session_id
+    || stripeObject?.metadata?.checkoutSessionId
+  );
+  if (embeddedSessionId.startsWith('cs_')) sessionIds.add(embeddedSessionId);
+
+  const paymentIntentId = await resolvePaymentIntentId(stripeObject);
+  if (paymentIntentId && stripe) {
+    try {
+      const sessions = await stripe.checkout.sessions.list({
+        payment_intent: paymentIntentId,
+        limit: 10
+      });
+
+      for (const session of sessions?.data || []) {
+        const sessionId = getStringValue(session?.id);
+        if (sessionId.startsWith('cs_')) sessionIds.add(sessionId);
+      }
+    } catch (error) {
+      console.warn('[Stripe Webhook] impossibile risalire alla checkout session dal payment_intent:', error?.message || error);
+    }
+  }
+
+  return Array.from(sessionIds);
+}
+
+async function applyRefundState(stripeObject, eventType) {
+  const amount = Number(stripeObject?.amount || 0);
+  const amountRefunded = Number(stripeObject?.amount_refunded || stripeObject?.amountRefunded || 0);
+  const isFullyRefunded = amount > 0 && amountRefunded >= amount;
+  const paymentStatus = isFullyRefunded ? FULL_REFUND_STATUS : PARTIAL_REFUND_STATUS;
+  const nextBookingStatus = isFullyRefunded ? 'cancelled' : 'active';
+  const sessionIds = await resolveCheckoutSessionIds(stripeObject);
+
+  if (!sessionIds.length) {
+    console.warn('[Stripe Webhook] nessuna checkout session trovata per evento refund:', eventType);
+    return;
+  }
+
+  const bookingUpdate = await Booking.updateMany(
+    { paymentId: { $in: sessionIds } },
+    {
+      $set: {
+        paymentStatus,
+        status: nextBookingStatus
+      }
+    }
+  );
+
+  const donationUpdate = await Donation.updateMany(
+    { paymentId: { $in: sessionIds } },
+    {
+      $set: {
+        paymentStatus,
+        status: nextBookingStatus
+      }
+    }
+  );
+
+  console.log('[Stripe Webhook] refund sincronizzato:', {
+    eventType,
+    paymentStatus,
+    sessionIds,
+    bookingsMatched: bookingUpdate?.matchedCount || 0,
+    bookingsModified: bookingUpdate?.modifiedCount || 0,
+    donationsMatched: donationUpdate?.matchedCount || 0,
+    donationsModified: donationUpdate?.modifiedCount || 0
+  });
 }
 
 // Webhook handler
@@ -236,6 +337,9 @@ router.post('/webhook', async (req, res) => {
       } else {
         console.log('Prenotazione salvata e notificato il proprietario:', session.customer_email);
       }
+    } else if (event && event.type === 'charge.refunded') {
+      console.log('[Stripe Webhook] handling refund event:', event.type);
+      await applyRefundState(event.data.object, event.type);
     }
   } catch (err) {
     console.error('[Stripe Webhook] errore interno gestionale:', err);
