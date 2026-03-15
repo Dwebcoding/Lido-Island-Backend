@@ -9,6 +9,8 @@ const router = express.Router();
 const TAVOLI_TOTALI = 110;
 const SDRAIO_TOTALI = 65;
 const OMBRELLONI_TOTALI = 65;
+const PARTIAL_REFUND_STATUS = 'partially_refunded';
+const FULL_REFUND_STATUS = 'refunded';
 
 function requireAdminAccess(req, res, next) {
   const configuredAdminKey = String(process.env.BOOKING_ADMIN_KEY || '').trim();
@@ -50,6 +52,28 @@ function isBookingPayload(bookingData) {
   return Boolean(bookingData?.date) && (tables + chairs + umbrellas) > 0;
 }
 
+function normalizeSessionPaymentStatus(session) {
+  const baseStatus = String(session?.payment_status || '').toLowerCase();
+  const latestCharge = session?.payment_intent && typeof session.payment_intent === 'object'
+    ? session.payment_intent.latest_charge
+    : null;
+  const amountRefunded = Number(latestCharge?.amount_refunded || 0);
+  const amountTotal = Number(session?.amount_total || 0);
+
+  if (amountTotal > 0 && amountRefunded >= amountTotal) return FULL_REFUND_STATUS;
+  if (amountRefunded > 0) return PARTIAL_REFUND_STATUS;
+  return baseStatus;
+}
+
+function getBookingStatusFromPaymentStatus(paymentStatus) {
+  const normalizedStatus = String(paymentStatus || '').toLowerCase();
+  if (normalizedStatus === 'paid' || normalizedStatus === PARTIAL_REFUND_STATUS) {
+    return 'active';
+  }
+
+  return 'cancelled';
+}
+
 function getBookingSort(sortByRaw) {
   const sortBy = String(sortByRaw || '').toLowerCase();
   if (sortBy === 'desc' || sortBy === 'newest') return { paidAt: -1, createdAt: -1, _id: -1 };
@@ -88,6 +112,14 @@ function buildBookingNotes(notes, tableNumbers) {
   return `${normalizedNotes}\n${tablesLine}`;
 }
 
+function buildAdminCancellationNotes(notes) {
+  const normalizedNotes = String(notes || '').trim();
+  const cancellationLine = 'Annullata manualmente dal gestionale.';
+  if (!normalizedNotes) return cancellationLine;
+  if (normalizedNotes.includes(cancellationLine)) return normalizedNotes;
+  return `${normalizedNotes}\n${cancellationLine}`;
+}
+
 // Cancellazione prenotazione gratuita fino a 48h prima
 router.patch('/cancella', async (req, res) => {
   try {
@@ -110,6 +142,44 @@ router.patch('/cancella', async (req, res) => {
     return res.json({ success: true });
   } catch (_error) {
     return res.status(500).json({ error: 'Errore durante la cancellazione' });
+  }
+});
+
+router.patch('/admin-cancel/:id', requireAdminAccess, async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'ID prenotazione richiesto' });
+
+    const booking = await Booking.findById(id);
+    if (!booking) return res.status(404).json({ error: 'Prenotazione non trovata' });
+
+    if (String(booking.status || '').toLowerCase() === 'cancelled') {
+      return res.json({
+        success: true,
+        alreadyCancelled: true,
+        item: {
+          id: booking._id,
+          bookingId: booking.bookingId || '',
+          status: booking.status || 'cancelled'
+        }
+      });
+    }
+
+    booking.status = 'cancelled';
+    booking.notes = buildAdminCancellationNotes(booking.notes);
+    await booking.save();
+
+    return res.json({
+      success: true,
+      item: {
+        id: booking._id,
+        bookingId: booking.bookingId || '',
+        status: booking.status || 'cancelled'
+      }
+    });
+  } catch (error) {
+    console.error('[Booking] /admin-cancel error:', error);
+    return res.status(500).json({ error: 'Errore durante l\'annullamento amministrativo' });
   }
 });
 
@@ -281,7 +351,7 @@ router.post('/sync-stripe', requireAdminAccess, async (req, res) => {
     const limit = Math.min(Math.max(toInt(req.query.limit, 100), 1), 100);
     const sessions = await stripe.checkout.sessions.list({
       limit,
-      expand: ['data.payment_intent']
+      expand: ['data.payment_intent.latest_charge']
     });
 
     let bookingsUpserted = 0;
@@ -290,11 +360,8 @@ router.post('/sync-stripe', requireAdminAccess, async (req, res) => {
     let conflicts = 0;
 
     for (const session of sessions.data || []) {
-      const paymentStatus = String(session?.payment_status || '').toLowerCase();
-      if (paymentStatus !== 'paid') {
-        skipped++;
-        continue;
-      }
+      const paymentStatus = normalizeSessionPaymentStatus(session);
+      const bookingStatus = getBookingStatusFromPaymentStatus(paymentStatus);
 
       const metadata = session?.metadata || {};
       const bookingData = parseBookingMetadata(metadata.booking);
@@ -304,6 +371,12 @@ router.post('/sync-stripe', requireAdminAccess, async (req, res) => {
         const incomingTableNumbers = Array.isArray(bookingData.tableNumbers)
           ? bookingData.tableNumbers.map((n) => Number(n)).filter((n) => Number.isInteger(n) && n >= 1 && n <= TAVOLI_TOTALI)
           : [];
+        const existingBooking = await Booking.findOne({ paymentId: session.id }).select('_id').lean();
+        if (bookingStatus !== 'active' && !existingBooking) {
+          skipped++;
+          continue;
+        }
+
         const payload = {
           bookingId: bookingData.id || bookingData.bookingId || `ISOLA-${Date.now()}-${String(session.id || '').slice(-8).toUpperCase()}`,
           date: bookingData.date || '',
@@ -318,12 +391,12 @@ router.post('/sync-stripe', requireAdminAccess, async (req, res) => {
           amount: Number(session.amount_total || 0),
           paymentId: session.id || '',
           paymentStatus,
-          status: 'active',
+          status: bookingStatus,
           source: 'stripe_sync',
           paidAt
         };
 
-        if (incomingTableNumbers.length > 0 && payload.date) {
+        if (bookingStatus === 'active' && incomingTableNumbers.length > 0 && payload.date) {
           const conflict = await Booking.findOne({
             status: 'active',
             date: payload.date,
@@ -344,13 +417,20 @@ router.post('/sync-stripe', requireAdminAccess, async (req, res) => {
         );
         bookingsUpserted++;
 
-        // Invia email di notifica al proprietario e conferma al cliente
-        try {
-          await mailer.sendOwnerNotification({ booking: bookingDoc, amount: payload.amount, notifyCustomer: true });
-        } catch (mailErr) {
-          console.warn('[Booking] Email notification failed during sync:', mailErr);
+        if (bookingStatus === 'active') {
+          try {
+            await mailer.sendOwnerNotification({ booking: bookingDoc, amount: payload.amount, notifyCustomer: true });
+          } catch (mailErr) {
+            console.warn('[Booking] Email notification failed during sync:', mailErr);
+          }
         }
       } else {
+        const existingDonation = await Donation.findOne({ paymentId: session.id }).select('_id').lean();
+        if (bookingStatus !== 'active' && !existingDonation) {
+          skipped++;
+          continue;
+        }
+
         const donationPayload = {
           donorName: metadata.donation_name || '',
           donorEmail: session.customer_email || '',
@@ -359,7 +439,7 @@ router.post('/sync-stripe', requireAdminAccess, async (req, res) => {
           paymentId: session.id || '',
           paymentStatus,
           donationType: metadata.donation_type || 'generic',
-          status: 'active',
+          status: bookingStatus,
           source: 'stripe_sync',
           paidAt
         };

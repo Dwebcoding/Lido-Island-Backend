@@ -1,10 +1,14 @@
 // Test script for email functionality
+import 'dotenv/config';
 import mailer from './services/mailer.js';
 
 async function testEmail() {
   console.log('Testing email functionality...');
   
   try {
+    const verification = await mailer.verifyConnection();
+    console.log('SMTP verification:', JSON.stringify(verification, null, 2));
+
     // Test owner notification
     const testBooking = {
       _id: 'test-booking-123',

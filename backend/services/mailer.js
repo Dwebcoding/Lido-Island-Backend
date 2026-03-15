@@ -74,6 +74,43 @@ function makeTransporter() {
 const transporter = makeTransporter();
 
 export default {
+  getTransportStatus() {
+    return {
+      configured: Boolean(transporter),
+      host: SMTP_HOST || '',
+      port: SMTP_PORT,
+      user: SMTP_USER || '',
+      fromEmail: FROM_EMAIL,
+      ownerEmail: OWNER_EMAIL,
+      placeholderPassword: SMTP_PLACEHOLDER
+    };
+  },
+
+  async verifyConnection() {
+    if (!transporter) {
+      return {
+        ok: false,
+        reason: 'smtp_not_configured',
+        details: this.getTransportStatus()
+      };
+    }
+
+    try {
+      await transporter.verify();
+      return {
+        ok: true,
+        details: this.getTransportStatus()
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        reason: 'smtp_verify_failed',
+        error: error?.message || String(error),
+        details: this.getTransportStatus()
+      };
+    }
+  },
+
   // Invia una mail al proprietario dopo una prenotazione
   async sendOwnerNotification({ booking = {}, amount = 0, notifyCustomer = true }) {
     try {
