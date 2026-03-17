@@ -134,16 +134,24 @@ async function applyRefundState(stripeObject, eventType) {
   const paymentStatus = isFullyRefunded ? FULL_REFUND_STATUS : PARTIAL_REFUND_STATUS;
   const nextBookingStatus = isFullyRefunded ? 'cancelled' : 'active';
   const sessionIds = await resolveCheckoutSessionIds(stripeObject);
+  const paymentIntentId = getStringValue(stripeObject?.payment_intent || stripeObject?.paymentIntent);
 
   if (!sessionIds.length) {
     console.warn('[Stripe Webhook] nessuna checkout session trovata per evento refund:', eventType);
-    return;
+    if (!paymentIntentId) return;
   }
 
   const bookingUpdate = await Booking.updateMany(
-    { paymentId: { $in: sessionIds } },
+    {
+      $or: [
+        ...(sessionIds.length ? [{ paymentId: { $in: sessionIds } }] : []),
+        ...(paymentIntentId ? [{ paymentIntentId }] : [])
+      ]
+    },
     {
       $set: {
+        paymentIntentId,
+        refundedAmount: amountRefunded,
         paymentStatus,
         status: nextBookingStatus
       }
@@ -278,7 +286,9 @@ router.post('/webhook', async (req, res) => {
             ...normalizedBooking,
             email: session.customer_email,
             paymentId: session.id,
+            paymentIntentId: getStringValue(session.payment_intent),
             amount: session.amount_total,
+            refundedAmount: 0,
             paymentStatus: session.payment_status || 'paid',
             status: 'active'
           });

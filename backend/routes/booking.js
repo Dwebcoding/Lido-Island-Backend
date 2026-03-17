@@ -1,6 +1,6 @@
-// Booking route (ESM) - No auth required
 import express from 'express';
 import Stripe from 'stripe';
+import { randomUUID } from 'crypto';
 import Booking from '../models/booking.js';
 import Donation from '../models/donation.js';
 import mailer from '../services/mailer.js';
@@ -11,6 +11,7 @@ const SDRAIO_TOTALI = 65;
 const OMBRELLONI_TOTALI = 65;
 const PARTIAL_REFUND_STATUS = 'partially_refunded';
 const FULL_REFUND_STATUS = 'refunded';
+const MANUAL_PAYMENT_STATUS = 'manuale';
 
 function requireAdminAccess(req, res, next) {
   const configuredAdminKey = String(process.env.BOOKING_ADMIN_KEY || '').trim();
@@ -32,7 +33,39 @@ function toInt(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function toNonNegativeInt(value, fallback = 0) {
+  const parsed = toInt(value, fallback);
+  return parsed >= 0 ? parsed : fallback;
+}
 
+function normalizeText(value, fallback = '') {
+  return typeof value === 'string' ? value.trim() : fallback;
+}
+
+function normalizeEmail(value) {
+  return normalizeText(value).toLowerCase();
+}
+
+function isValidDateString(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || '').trim());
+}
+
+function normalizeTableNumbers(value) {
+  const rawItems = Array.isArray(value)
+    ? value
+    : String(value || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+  const unique = new Set();
+  for (const item of rawItems) {
+    const number = Number(item);
+    if (Number.isInteger(number) && number >= 1 && number <= TAVOLI_TOTALI) unique.add(number);
+  }
+
+  return Array.from(unique).sort((left, right) => left - right);
+}
 
 function parseBookingMetadata(rawBooking) {
   if (typeof rawBooking !== 'string') return {};
@@ -96,12 +129,7 @@ function getDonationSort(sortByRaw) {
 
 function buildBookingNotes(notes, tableNumbers) {
   const normalizedNotes = String(notes || '').trim();
-  const normalizedTableNumbers = Array.isArray(tableNumbers)
-    ? tableNumbers
-      .map((n) => Number(n))
-      .filter((n) => Number.isInteger(n) && n >= 1 && n <= TAVOLI_TOTALI)
-      .sort((left, right) => left - right)
-    : [];
+  const normalizedTableNumbers = normalizeTableNumbers(tableNumbers);
 
   if (!normalizedTableNumbers.length) return normalizedNotes;
 
@@ -112,15 +140,335 @@ function buildBookingNotes(notes, tableNumbers) {
   return `${normalizedNotes}\n${tablesLine}`;
 }
 
-function buildAdminCancellationNotes(notes) {
+function appendAdminAuditNote(notes, line) {
   const normalizedNotes = String(notes || '').trim();
-  const cancellationLine = 'Annullata manualmente dal gestionale.';
-  if (!normalizedNotes) return cancellationLine;
-  if (normalizedNotes.includes(cancellationLine)) return normalizedNotes;
-  return `${normalizedNotes}\n${cancellationLine}`;
+  const normalizedLine = String(line || '').trim();
+  if (!normalizedLine) return normalizedNotes;
+  if (!normalizedNotes) return normalizedLine;
+  if (normalizedNotes.includes(normalizedLine)) return normalizedNotes;
+  return `${normalizedNotes}\n${normalizedLine}`;
 }
 
-// Cancellazione prenotazione gratuita fino a 48h prima
+function buildAdminCancellationNotes(notes) {
+  return appendAdminAuditNote(notes, 'Annullata manualmente dal gestionale.');
+}
+
+function buildAdminRestoreNotes(notes) {
+  return appendAdminAuditNote(notes, 'Riattivata manualmente dal gestionale.');
+}
+
+function buildRefundNotes(notes, amountCents, reason) {
+  const amountLabel = `Rimborso registrato: ${(Number(amountCents || 0) / 100).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })}`;
+  const line = reason ? `${amountLabel} (${reason})` : amountLabel;
+  return appendAdminAuditNote(notes, line);
+}
+
+function createStripeClient() {
+  const stripeSecret = String(process.env.STRIPE_SECRET_KEY || '').trim();
+  if (!stripeSecret) return null;
+  try {
+    return new Stripe(stripeSecret, { apiVersion: null });
+  } catch (error) {
+    console.error('[Booking] Stripe init error:', error);
+    return null;
+  }
+}
+
+const stripeClient = createStripeClient();
+
+function generateBookingId() {
+  return `ADM-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${randomUUID().slice(0, 8).toUpperCase()}`;
+}
+
+function serializeBooking(booking) {
+  const item = typeof booking?.toObject === 'function' ? booking.toObject() : booking;
+  const refundedAmount = Number(item?.refundedAmount || 0);
+  const amount = Number(item?.amount || 0);
+  return {
+    id: item?._id,
+    bookingId: item?.bookingId || '',
+    date: item?.date || '',
+    name: item?.name || '',
+    email: item?.email || '',
+    phone: item?.phone || '',
+    notes: buildBookingNotes(item?.notes || '', item?.tableNumbers || []),
+    tables: Number(item?.tables || 0),
+    tableNumbers: normalizeTableNumbers(item?.tableNumbers || []),
+    chairs: Number(item?.chairs || 0),
+    umbrellas: Number(item?.umbrellas || 0),
+    amount,
+    refundedAmount,
+    refundableAmount: Math.max(amount - refundedAmount, 0),
+    paymentId: item?.paymentId || '',
+    paymentIntentId: item?.paymentIntentId || '',
+    paymentStatus: item?.paymentStatus || '',
+    status: item?.status || 'active',
+    source: item?.source || '',
+    paidAt: item?.paidAt || null,
+    createdAt: item?.createdAt || null,
+    updatedAt: item?.updatedAt || null,
+    lastRefundAt: item?.lastRefundAt || null,
+    lastRefundId: item?.lastRefundId || '',
+    hasStripePayment: Boolean(item?.paymentId)
+  };
+}
+
+function getStripeMetadataForBooking(booking, adminAction = 'updated') {
+  const bookingPayload = {
+    id: booking.bookingId || booking._id?.toString() || '',
+    bookingId: booking.bookingId || booking._id?.toString() || '',
+    date: booking.date || '',
+    name: booking.name || '',
+    email: booking.email || '',
+    phone: booking.phone || '',
+    notes: booking.notes || '',
+    tables: Number(booking.tables || 0),
+    tableNumbers: normalizeTableNumbers(booking.tableNumbers || []),
+    chairs: Number(booking.chairs || 0),
+    umbrellas: Number(booking.umbrellas || 0),
+    paymentStatus: booking.paymentStatus || '',
+    status: booking.status || 'active',
+    source: booking.source || ''
+  };
+
+  return {
+    booking: JSON.stringify(bookingPayload),
+    booking_id: booking.bookingId || booking._id?.toString() || '',
+    booking_date: booking.date || '',
+    booking_name: booking.name || '',
+    booking_email: booking.email || '',
+    booking_phone: booking.phone || '',
+    booking_tables: String(Number(booking.tables || 0)),
+    booking_table_numbers: normalizeTableNumbers(booking.tableNumbers || []).join(','),
+    booking_chairs: String(Number(booking.chairs || 0)),
+    booking_umbrellas: String(Number(booking.umbrellas || 0)),
+    booking_status: booking.status || 'active',
+    booking_payment_status: booking.paymentStatus || '',
+    booking_source: booking.source || '',
+    booking_admin_action: adminAction,
+    booking_refunded_amount: String(Number(booking.refundedAmount || 0))
+  };
+}
+
+async function resolveStripeSessionForBooking(booking) {
+  if (!stripeClient || !booking?.paymentId) return null;
+
+  try {
+    return await stripeClient.checkout.sessions.retrieve(booking.paymentId, {
+      expand: ['payment_intent.latest_charge']
+    });
+  } catch (error) {
+    console.warn('[Booking] Stripe session retrieve failed:', error?.message || error);
+    return null;
+  }
+}
+
+function getRefundedAmountFromSession(session) {
+  const latestCharge = session?.payment_intent && typeof session.payment_intent === 'object'
+    ? session.payment_intent.latest_charge
+    : null;
+  return Number(latestCharge?.amount_refunded || 0);
+}
+
+async function syncStripeBookingMetadata(booking, adminAction = 'updated') {
+  if (!stripeClient || !booking?.paymentId) return { synced: false };
+
+  const metadata = getStripeMetadataForBooking(booking, adminAction);
+  let sessionSynced = false;
+  let paymentIntentSynced = false;
+  let paymentIntentId = normalizeText(booking.paymentIntentId);
+
+  try {
+    await stripeClient.checkout.sessions.update(booking.paymentId, { metadata });
+    sessionSynced = true;
+  } catch (error) {
+    console.warn('[Booking] Stripe checkout session update failed:', error?.message || error);
+  }
+
+  if (!paymentIntentId) {
+    const session = await resolveStripeSessionForBooking(booking);
+    paymentIntentId = normalizeText(session?.payment_intent?.id || session?.payment_intent);
+    if (paymentIntentId && paymentIntentId !== booking.paymentIntentId) {
+      booking.paymentIntentId = paymentIntentId;
+      await booking.save();
+    }
+  }
+
+  if (paymentIntentId) {
+    try {
+      await stripeClient.paymentIntents.update(paymentIntentId, { metadata });
+      paymentIntentSynced = true;
+    } catch (error) {
+      console.warn('[Booking] Stripe payment intent update failed:', error?.message || error);
+    }
+  }
+
+  return {
+    synced: sessionSynced || paymentIntentSynced,
+    sessionSynced,
+    paymentIntentSynced
+  };
+}
+
+async function collectAvailabilityUsage(date, excludeId) {
+  const match = {
+    status: 'active',
+    date,
+    ...(excludeId ? { _id: { $ne: excludeId } } : {})
+  };
+
+  const [resourceTotals, conflictingBookings] = await Promise.all([
+    Booking.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: null,
+          chairsBooked: { $sum: '$chairs' },
+          umbrellasBooked: { $sum: '$umbrellas' }
+        }
+      }
+    ]),
+    Booking.find(
+      {
+        ...match,
+        tableNumbers: { $exists: true, $ne: [] }
+      },
+      { tableNumbers: 1, bookingId: 1, name: 1 }
+    ).lean()
+  ]);
+
+  const usedTableMap = new Map();
+  for (const item of conflictingBookings) {
+    for (const tableNumber of normalizeTableNumbers(item.tableNumbers || [])) {
+      if (!usedTableMap.has(tableNumber)) {
+        usedTableMap.set(tableNumber, {
+          bookingId: item.bookingId || '',
+          name: item.name || ''
+        });
+      }
+    }
+  }
+
+  return {
+    chairsBooked: Number(resourceTotals?.[0]?.chairsBooked || 0),
+    umbrellasBooked: Number(resourceTotals?.[0]?.umbrellasBooked || 0),
+    usedTableMap
+  };
+}
+
+async function assertBookingAvailability({ date, tableNumbers, chairs, umbrellas, excludeId }) {
+  if (!isValidDateString(date)) {
+    const error = new Error('Data prenotazione non valida');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const normalizedTables = normalizeTableNumbers(tableNumbers);
+  const normalizedChairs = toNonNegativeInt(chairs, 0);
+  const normalizedUmbrellas = toNonNegativeInt(umbrellas, 0);
+  const usage = await collectAvailabilityUsage(date, excludeId);
+
+  const conflictingTableNumbers = normalizedTables.filter((tableNumber) => usage.usedTableMap.has(tableNumber));
+  if (conflictingTableNumbers.length > 0) {
+    const conflictLabel = conflictingTableNumbers.join(', ');
+    const error = new Error(`I tavoli ${conflictLabel} risultano gia occupati per la data selezionata`);
+    error.statusCode = 409;
+    error.details = { conflictingTableNumbers };
+    throw error;
+  }
+
+  if (usage.chairsBooked + normalizedChairs > SDRAIO_TOTALI) {
+    const availableChairs = Math.max(SDRAIO_TOTALI - usage.chairsBooked, 0);
+    const error = new Error(`Sdraio insufficienti: disponibili ${availableChairs} sulla data selezionata`);
+    error.statusCode = 409;
+    throw error;
+  }
+
+  if (usage.umbrellasBooked + normalizedUmbrellas > OMBRELLONI_TOTALI) {
+    const availableUmbrellas = Math.max(OMBRELLONI_TOTALI - usage.umbrellasBooked, 0);
+    const error = new Error(`Ombrelloni insufficienti: disponibili ${availableUmbrellas} sulla data selezionata`);
+    error.statusCode = 409;
+    throw error;
+  }
+}
+
+function getAdminSource(source, paymentId, fallback = 'manual_admin') {
+  if (paymentId) return normalizeText(source, 'stripe_checkout') || 'stripe_checkout';
+  return normalizeText(source, fallback) || fallback;
+}
+
+function normalizeAdminBookingPayload(input = {}, existingBooking = null) {
+  const date = normalizeText(input.date, existingBooking?.date || '');
+  const tableNumbers = normalizeTableNumbers(input.tableNumbers ?? existingBooking?.tableNumbers ?? []);
+  const tables = tableNumbers.length > 0
+    ? tableNumbers.length
+    : toNonNegativeInt(input.tables, existingBooking?.tables || 0);
+  const chairs = toNonNegativeInt(input.chairs, existingBooking?.chairs || 0);
+  const umbrellas = toNonNegativeInt(input.umbrellas, existingBooking?.umbrellas || 0);
+  const amount = toNonNegativeInt(input.amount, existingBooking?.amount || 0);
+  const paymentId = normalizeText(input.paymentId, existingBooking?.paymentId || '');
+  const paymentIntentId = normalizeText(input.paymentIntentId, existingBooking?.paymentIntentId || '');
+  const refundedAmount = toNonNegativeInt(input.refundedAmount, existingBooking?.refundedAmount || 0);
+  const statusCandidate = normalizeText(input.status, existingBooking?.status || 'active').toLowerCase();
+  const status = statusCandidate === 'cancelled' ? 'cancelled' : 'active';
+  const source = getAdminSource(input.source, paymentId, existingBooking?.source || 'manual_admin');
+  const fallbackPaymentStatus = paymentId ? 'paid' : MANUAL_PAYMENT_STATUS;
+  const paymentStatus = normalizeText(input.paymentStatus, existingBooking?.paymentStatus || fallbackPaymentStatus) || fallbackPaymentStatus;
+
+  if (!isValidDateString(date)) {
+    const error = new Error('Data prenotazione obbligatoria o non valida');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (tables + chairs + umbrellas <= 0) {
+    const error = new Error('Inserisci almeno un tavolo, una sdraio oppure un ombrellone');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (tableNumbers.length > 0 && tables !== tableNumbers.length) {
+    const error = new Error('Il numero tavoli deve coincidere con i numeri tavolo selezionati');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const fallbackName = existingBooking?.name || (tableNumbers.length > 0 ? 'Prenotazione manuale' : 'Prenotazione amministrativa');
+
+  return {
+    bookingId: normalizeText(input.bookingId, existingBooking?.bookingId || '') || generateBookingId(),
+    date,
+    name: normalizeText(input.name, fallbackName),
+    email: normalizeEmail(input.email ?? existingBooking?.email ?? ''),
+    phone: normalizeText(input.phone, existingBooking?.phone || ''),
+    notes: normalizeText(input.notes, existingBooking?.notes || ''),
+    tables,
+    tableNumbers,
+    chairs,
+    umbrellas,
+    amount,
+    refundedAmount: Math.min(refundedAmount, amount),
+    paymentId,
+    paymentIntentId,
+    paymentStatus,
+    status,
+    source,
+    paidAt: existingBooking?.paidAt || new Date()
+  };
+}
+
+async function sendAdminBookingEmails(booking) {
+  try {
+    await mailer.sendOwnerNotification({
+      booking,
+      amount: booking.amount || 0,
+      notifyCustomer: true
+    });
+  } catch (error) {
+    console.warn('[Booking] Admin email notification failed:', error?.message || error);
+  }
+}
+
 router.patch('/cancella', async (req, res) => {
   try {
     const { email, date } = req.body || {};
@@ -145,9 +493,98 @@ router.patch('/cancella', async (req, res) => {
   }
 });
 
+router.post('/admin-bookings', requireAdminAccess, async (req, res) => {
+  try {
+    const payload = normalizeAdminBookingPayload(req.body);
+
+    if (payload.status === 'active') {
+      await assertBookingAvailability({
+        date: payload.date,
+        tableNumbers: payload.tableNumbers,
+        chairs: payload.chairs,
+        umbrellas: payload.umbrellas
+      });
+    }
+
+    const booking = await Booking.create({
+      ...payload,
+      notes: buildBookingNotes(payload.notes, payload.tableNumbers)
+    });
+
+    const stripeSync = await syncStripeBookingMetadata(booking, 'created');
+    await sendAdminBookingEmails(booking);
+
+    return res.status(201).json({
+      success: true,
+      stripeSync,
+      item: serializeBooking(booking)
+    });
+  } catch (error) {
+    console.error('[Booking] /admin-bookings create error:', error);
+    return res.status(error.statusCode || 500).json({ error: error.message || 'Errore creazione prenotazione amministrativa', details: error.details || undefined });
+  }
+});
+
+router.patch('/admin-bookings/:id', requireAdminAccess, async (req, res) => {
+  try {
+    const id = normalizeText(req.params.id);
+    if (!id) return res.status(400).json({ error: 'ID prenotazione richiesto' });
+
+    const booking = await Booking.findById(id);
+    if (!booking) return res.status(404).json({ error: 'Prenotazione non trovata' });
+
+    const payload = normalizeAdminBookingPayload(req.body, booking);
+    const isActivating = payload.status === 'active';
+
+    if (isActivating && payload.refundedAmount >= payload.amount && payload.amount > 0) {
+      return res.status(409).json({ error: 'Non puoi riattivare una prenotazione gia rimborsata totalmente' });
+    }
+
+    if (isActivating) {
+      await assertBookingAvailability({
+        date: payload.date,
+        tableNumbers: payload.tableNumbers,
+        chairs: payload.chairs,
+        umbrellas: payload.umbrellas,
+        excludeId: booking._id
+      });
+    }
+
+    booking.bookingId = payload.bookingId;
+    booking.date = payload.date;
+    booking.name = payload.name;
+    booking.email = payload.email;
+    booking.phone = payload.phone;
+    booking.notes = buildBookingNotes(payload.notes, payload.tableNumbers);
+    booking.tables = payload.tables;
+    booking.tableNumbers = payload.tableNumbers;
+    booking.chairs = payload.chairs;
+    booking.umbrellas = payload.umbrellas;
+    booking.amount = payload.amount;
+    booking.refundedAmount = payload.refundedAmount;
+    booking.paymentId = payload.paymentId;
+    booking.paymentIntentId = payload.paymentIntentId;
+    booking.paymentStatus = payload.paymentStatus;
+    booking.status = payload.status;
+    booking.source = payload.source;
+    await booking.save();
+
+    const stripeSync = await syncStripeBookingMetadata(booking, 'updated');
+
+    return res.json({
+      success: true,
+      stripeSync,
+      item: serializeBooking(booking)
+    });
+  } catch (error) {
+    console.error('[Booking] /admin-bookings update error:', error);
+    return res.status(error.statusCode || 500).json({ error: error.message || 'Errore aggiornamento prenotazione amministrativa', details: error.details || undefined });
+  }
+});
+
 router.patch('/admin-cancel/:id', requireAdminAccess, async (req, res) => {
   try {
-    const id = String(req.params.id || '').trim();
+    const id = normalizeText(req.params.id);
     if (!id) return res.status(400).json({ error: 'ID prenotazione richiesto' });
 
     const booking = await Booking.findById(id);
@@ -157,25 +594,19 @@ router.patch('/admin-cancel/:id', requireAdminAccess, async (req, res) => {
       return res.json({
         success: true,
         alreadyCancelled: true,
-        item: {
-          id: booking._id,
-          bookingId: booking.bookingId || '',
-          status: booking.status || 'cancelled'
-        }
+        item: serializeBooking(booking)
       });
     }
 
     booking.status = 'cancelled';
     booking.notes = buildAdminCancellationNotes(booking.notes);
     await booking.save();
+    const stripeSync = await syncStripeBookingMetadata(booking, 'cancelled');
 
     return res.json({
       success: true,
-      item: {
-        id: booking._id,
-        bookingId: booking.bookingId || '',
-        status: booking.status || 'cancelled'
-      }
+      stripeSync,
+      item: serializeBooking(booking)
     });
   } catch (error) {
     console.error('[Booking] /admin-cancel error:', error);
@@ -183,7 +614,115 @@ router.patch('/admin-cancel/:id', requireAdminAccess, async (req, res) => {
   }
 });
 
-// Lista prenotazioni per gestionale
+router.patch('/admin-restore/:id', requireAdminAccess, async (req, res) => {
+  try {
+    const id = normalizeText(req.params.id);
+    if (!id) return res.status(400).json({ error: 'ID prenotazione richiesto' });
+
+    const booking = await Booking.findById(id);
+    if (!booking) return res.status(404).json({ error: 'Prenotazione non trovata' });
+
+    if (Number(booking.refundedAmount || 0) >= Number(booking.amount || 0) && Number(booking.amount || 0) > 0) {
+      return res.status(409).json({ error: 'Prenotazione rimborsata totalmente: impossibile riattivarla' });
+    }
+
+    await assertBookingAvailability({
+      date: booking.date,
+      tableNumbers: booking.tableNumbers,
+      chairs: booking.chairs,
+      umbrellas: booking.umbrellas,
+      excludeId: booking._id
+    });
+
+    booking.status = 'active';
+    booking.notes = buildAdminRestoreNotes(booking.notes);
+    await booking.save();
+    const stripeSync = await syncStripeBookingMetadata(booking, 'restored');
+
+    return res.json({
+      success: true,
+      stripeSync,
+      item: serializeBooking(booking)
+    });
+  } catch (error) {
+    console.error('[Booking] /admin-restore error:', error);
+    return res.status(error.statusCode || 500).json({ error: error.message || 'Errore durante la riattivazione della prenotazione' });
+  }
+});
+
+router.post('/admin-refund/:id', requireAdminAccess, async (req, res) => {
+  try {
+    const id = normalizeText(req.params.id);
+    if (!id) return res.status(400).json({ error: 'ID prenotazione richiesto' });
+    if (!stripeClient) return res.status(503).json({ error: 'Stripe non configurato sul backend' });
+
+    const booking = await Booking.findById(id);
+    if (!booking) return res.status(404).json({ error: 'Prenotazione non trovata' });
+    if (!booking.paymentId) return res.status(400).json({ error: 'La prenotazione non e associata a un pagamento Stripe' });
+
+    const session = await resolveStripeSessionForBooking(booking);
+    if (!session) return res.status(502).json({ error: 'Impossibile recuperare la sessione Stripe della prenotazione' });
+
+    const paymentIntentId = normalizeText(session?.payment_intent?.id || session?.payment_intent || booking.paymentIntentId);
+    const chargeId = normalizeText(session?.payment_intent?.latest_charge?.id || '');
+    const totalAmount = Number(session.amount_total || booking.amount || 0);
+    const currentRefunded = Math.max(Number(booking.refundedAmount || 0), getRefundedAmountFromSession(session));
+    const refundableAmount = Math.max(totalAmount - currentRefunded, 0);
+    if (refundableAmount <= 0) {
+      return res.status(409).json({ error: 'Questa prenotazione risulta gia rimborsata completamente' });
+    }
+
+    const requestedAmount = toNonNegativeInt(req.body?.amount, refundableAmount);
+    const refundAmount = requestedAmount > 0 ? requestedAmount : refundableAmount;
+    if (refundAmount > refundableAmount) {
+      return res.status(409).json({ error: `Importo rimborsabile massimo: ${refundableAmount} centesimi` });
+    }
+
+    const cancelBooking = req.body?.cancelBooking !== false;
+    const reason = normalizeText(req.body?.reason);
+    const refundPayload = {
+      amount: refundAmount,
+      metadata: {
+        booking_id: booking.bookingId || booking._id.toString(),
+        booking_admin_action: cancelBooking ? 'refund_and_cancel' : 'partial_refund',
+        booking_reason: reason
+      }
+    };
+    if (paymentIntentId) refundPayload.payment_intent = paymentIntentId;
+    else if (chargeId) refundPayload.charge = chargeId;
+    else return res.status(502).json({ error: 'Impossibile risalire al pagamento Stripe da rimborsare' });
+
+    const refund = await stripeClient.refunds.create(refundPayload);
+    const nextRefundedAmount = currentRefunded + refundAmount;
+    booking.paymentIntentId = paymentIntentId || booking.paymentIntentId;
+    booking.refundedAmount = Math.min(nextRefundedAmount, totalAmount);
+    booking.paymentStatus = booking.refundedAmount >= totalAmount ? FULL_REFUND_STATUS : PARTIAL_REFUND_STATUS;
+    booking.lastRefundId = refund.id || '';
+    booking.lastRefundAt = new Date();
+    if (cancelBooking || booking.paymentStatus === FULL_REFUND_STATUS) {
+      booking.status = 'cancelled';
+      booking.notes = buildAdminCancellationNotes(booking.notes);
+    }
+    booking.notes = buildRefundNotes(booking.notes, refundAmount, reason);
+    await booking.save();
+    const stripeSync = await syncStripeBookingMetadata(booking, 'refunded');
+
+    return res.json({
+      success: true,
+      refund: {
+        id: refund.id,
+        amount: refund.amount,
+        status: refund.status || 'pending'
+      },
+      stripeSync,
+      item: serializeBooking(booking)
+    });
+  } catch (error) {
+    console.error('[Booking] /admin-refund error:', error);
+    return res.status(error.statusCode || 500).json({ error: error.message || 'Errore durante il rimborso Stripe' });
+  }
+});
+
 router.get('/lista', requireAdminAccess, async (req, res) => {
   try {
     const date = String(req.query.date || '').trim();
@@ -203,26 +742,7 @@ router.get('/lista', requireAdminAccess, async (req, res) => {
 
     return res.json({
       count: bookings.length,
-      items: bookings.map((b) => ({
-        id: b._id,
-        bookingId: b.bookingId || '',
-        date: b.date,
-        name: b.name || '',
-        email: b.email || '',
-        phone: b.phone || '',
-        notes: buildBookingNotes(b.notes, b.tableNumbers),
-        tables: b.tables || 0,
-        tableNumbers: Array.isArray(b.tableNumbers) ? b.tableNumbers : [],
-        chairs: b.chairs || 0,
-        umbrellas: b.umbrellas || 0,
-        amount: b.amount || 0,
-        paymentId: b.paymentId || '',
-        paymentStatus: b.paymentStatus || '',
-        status: b.status || 'active',
-        source: b.source || '',
-        paidAt: b.paidAt || null,
-        createdAt: b.createdAt || null
-      }))
+      items: bookings.map((booking) => serializeBooking(booking))
     });
   } catch (error) {
     console.error('[Booking] /lista error:', error);
@@ -230,7 +750,6 @@ router.get('/lista', requireAdminAccess, async (req, res) => {
   }
 });
 
-// Riepilogo quantitativi prenotati per data
 router.get('/stats', requireAdminAccess, async (req, res) => {
   try {
     const date = String(req.query.date || '').trim();
@@ -248,6 +767,7 @@ router.get('/stats', requireAdminAccess, async (req, res) => {
           chairsBooked: { $sum: '$chairs' },
           umbrellasBooked: { $sum: '$umbrellas' },
           totalAmount: { $sum: '$amount' },
+          refundedAmount: { $sum: '$refundedAmount' },
           bookings: { $sum: 1 }
         }
       }
@@ -258,6 +778,7 @@ router.get('/stats', requireAdminAccess, async (req, res) => {
       chairsBooked: 0,
       umbrellasBooked: 0,
       totalAmount: 0,
+      refundedAmount: 0,
       bookings: 0
     };
 
@@ -270,7 +791,9 @@ router.get('/stats', requireAdminAccess, async (req, res) => {
       tablesAvailable: Math.max(TAVOLI_TOTALI - stats.tablesBooked, 0),
       chairsAvailable: Math.max(SDRAIO_TOTALI - stats.chairsBooked, 0),
       umbrellasAvailable: Math.max(OMBRELLONI_TOTALI - stats.umbrellasBooked, 0),
-      totalAmount: stats.totalAmount
+      totalAmount: stats.totalAmount,
+      refundedAmount: stats.refundedAmount,
+      netAmount: Math.max(Number(stats.totalAmount || 0) - Number(stats.refundedAmount || 0), 0)
     });
   } catch (error) {
     console.error('[Booking] /stats error:', error);
@@ -278,7 +801,6 @@ router.get('/stats', requireAdminAccess, async (req, res) => {
   }
 });
 
-// Lista donazioni per gestionale
 router.get('/donazioni', requireAdminAccess, async (req, res) => {
   try {
     const date = String(req.query.date || '').trim();
@@ -312,7 +834,6 @@ router.get('/donazioni', requireAdminAccess, async (req, res) => {
   }
 });
 
-// Riepilogo donazioni
 router.get('/donazioni-stats', requireAdminAccess, async (req, res) => {
   try {
     const date = String(req.query.date || '').trim();
@@ -341,7 +862,6 @@ router.get('/donazioni-stats', requireAdminAccess, async (req, res) => {
   }
 });
 
-// Sync forzato da Stripe -> DB (prenotazioni + donazioni)
 router.post('/sync-stripe', requireAdminAccess, async (req, res) => {
   try {
     const stripeSecret = (process.env.STRIPE_SECRET_KEY || '').trim();
@@ -368,10 +888,9 @@ router.post('/sync-stripe', requireAdminAccess, async (req, res) => {
       const paidAt = session?.created ? new Date(session.created * 1000) : new Date();
 
       if (isBookingPayload(bookingData)) {
-        const incomingTableNumbers = Array.isArray(bookingData.tableNumbers)
-          ? bookingData.tableNumbers.map((n) => Number(n)).filter((n) => Number.isInteger(n) && n >= 1 && n <= TAVOLI_TOTALI)
-          : [];
+        const incomingTableNumbers = normalizeTableNumbers(bookingData.tableNumbers || []);
         const existingBooking = await Booking.findOne({ paymentId: session.id }).select('_id').lean();
+
         if (bookingStatus !== 'active' && !existingBooking) {
           skipped++;
           continue;
@@ -383,13 +902,15 @@ router.post('/sync-stripe', requireAdminAccess, async (req, res) => {
           name: bookingData.name || '',
           email: session.customer_email || bookingData.email || '',
           phone: bookingData.phone || '',
-          notes: bookingData.notes || '',
+          notes: buildBookingNotes(bookingData.notes || '', incomingTableNumbers),
           tables: incomingTableNumbers.length > 0 ? incomingTableNumbers.length : Number(bookingData.tables || 0),
           tableNumbers: incomingTableNumbers,
           chairs: Number(bookingData.chairs || 0),
           umbrellas: Number(bookingData.umbrellas || 0),
           amount: Number(session.amount_total || 0),
+          refundedAmount: getRefundedAmountFromSession(session),
           paymentId: session.id || '',
+          paymentIntentId: normalizeText(session?.payment_intent?.id || session?.payment_intent),
           paymentStatus,
           status: bookingStatus,
           source: 'stripe_sync',
@@ -467,7 +988,6 @@ router.post('/sync-stripe', requireAdminAccess, async (req, res) => {
   }
 });
 
-// Regole di apertura/chiusura specifiche (anno 2026)
 function isDateOpen(dateStr) {
   if (!dateStr) return false;
   const d = new Date(`${dateStr}T00:00:00`);
@@ -559,7 +1079,6 @@ router.get('/tavoli-disponibili', async (req, res) => {
   }
 });
 
-// Elenco numeri tavolo gia occupati per una data
 router.get('/tavoli-occupati', async (req, res) => {
   try {
     const { date } = req.query;

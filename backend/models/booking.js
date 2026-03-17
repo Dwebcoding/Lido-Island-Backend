@@ -15,7 +15,11 @@ const bookingSchema = new mongoose.Schema(
     umbrellas: { type: Number, required: true, min: 0, default: 0 },
     amount: { type: Number, default: 0 }, // cents
     paymentId: { type: String, trim: true, default: '' }, // Stripe checkout session id
+    paymentIntentId: { type: String, trim: true, default: '' },
     paymentStatus: { type: String, trim: true, default: 'paid' },
+    refundedAmount: { type: Number, min: 0, default: 0 },
+    lastRefundId: { type: String, trim: true, default: '' },
+    lastRefundAt: { type: Date, default: null },
     status: { type: String, trim: true, default: 'active', index: true },
     source: { type: String, trim: true, default: 'stripe_checkout' },
     paidAt: { type: Date, default: Date.now, index: true }
