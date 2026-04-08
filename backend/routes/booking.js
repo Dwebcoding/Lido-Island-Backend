@@ -1013,6 +1013,8 @@ function isDateOpen(dateStr) {
   if (explicitBlocked.has(dateStr)) return false;
   if (explicitOpen.has(dateStr)) return true;
 
+  if (month === 5 && day >= 24 && day <= 31) return true;
+
   if (year >= startYear && year <= endYear) {
     if ((month === 4 || month === 5) && weekday === 0) return true;
     if (month >= 6 && month <= 8) return true;
