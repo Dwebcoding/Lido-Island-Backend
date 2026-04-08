@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import dns from 'dns';
 import { fileURLToPath } from 'url';
+import fetch from 'node-fetch';
 import nodemailer from 'nodemailer';
 import { getWhatsAppService } from './whatsapp.js';
 
@@ -32,8 +33,17 @@ const SMTP_PASS = process.env.SMTP_PASS || null;
 const FROM_EMAIL = process.env.FROM_EMAIL || 'postamaster@isolalido.it';
 const OWNER_EMAIL = process.env.OWNER_EMAIL || 'info@isolalido.it';
 const SMTP_PLACEHOLDER = (SMTP_PASS || '').includes('PUT_YOUR_OUTLOOK_APP_PASSWORD_HERE');
+const GRAPH_TENANT_ID = process.env.MS_GRAPH_TENANT_ID || '';
+const GRAPH_CLIENT_ID = process.env.MS_GRAPH_CLIENT_ID || '';
+const GRAPH_CLIENT_SECRET = process.env.MS_GRAPH_CLIENT_SECRET || '';
+const GRAPH_SENDER_EMAIL = process.env.MS_GRAPH_SENDER_EMAIL || FROM_EMAIL || SMTP_USER || '';
 let resolvedSmtpHost = '';
 let transporterPromise = null;
+let graphTokenCache = { accessToken: '', expiresAt: 0 };
+
+function isGraphConfigured() {
+  return Boolean(GRAPH_TENANT_ID && GRAPH_CLIENT_ID && GRAPH_CLIENT_SECRET && GRAPH_SENDER_EMAIL);
+}
 
 function formatCentsToEuro(cents) {
   try {
@@ -113,9 +123,102 @@ function summarizeMailError(error) {
   };
 }
 
+function normalizeRecipients(value) {
+  if (!value) return [];
+
+  const input = Array.isArray(value) ? value : String(value).split(',');
+
+  return input
+    .map((entry) => {
+      if (!entry) return '';
+      if (typeof entry === 'string') return entry.trim();
+      if (typeof entry === 'object') return String(entry.address || entry.email || '').trim();
+      return String(entry).trim();
+    })
+    .filter(Boolean)
+    .map((address) => ({ emailAddress: { address } }));
+}
+
+async function getGraphAccessToken() {
+  if (!isGraphConfigured()) {
+    throw new Error('graph_not_configured');
+  }
+
+  if (graphTokenCache.accessToken && graphTokenCache.expiresAt > Date.now() + 60000) {
+    return graphTokenCache.accessToken;
+  }
+
+  const response = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(GRAPH_TENANT_ID)}/oauth2/v2.0/token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      client_id: GRAPH_CLIENT_ID,
+      client_secret: GRAPH_CLIENT_SECRET,
+      scope: 'https://graph.microsoft.com/.default',
+      grant_type: 'client_credentials',
+    }),
+  });
+
+  const payload = await response.json();
+  if (!response.ok || !payload.access_token) {
+    throw new Error(payload.error_description || payload.error?.message || payload.error || 'graph_token_request_failed');
+  }
+
+  graphTokenCache = {
+    accessToken: payload.access_token,
+    expiresAt: Date.now() + ((Number(payload.expires_in) || 3600) * 1000),
+  };
+
+  return graphTokenCache.accessToken;
+}
+
+async function sendMailWithGraph(message, label) {
+  const startedAt = Date.now();
+  const accessToken = await getGraphAccessToken();
+  const toRecipients = normalizeRecipients(message.to);
+  const ccRecipients = normalizeRecipients(message.cc);
+  const bccRecipients = normalizeRecipients(message.bcc);
+
+  const response = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(GRAPH_SENDER_EMAIL)}/sendMail`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      message: {
+        subject: message.subject || '',
+        body: {
+          contentType: message.html ? 'HTML' : 'Text',
+          content: message.html || message.text || '',
+        },
+        toRecipients,
+        ccRecipients,
+        bccRecipients,
+        replyTo: normalizeRecipients(message.from),
+      },
+      saveToSentItems: true,
+    }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.text();
+    throw new Error(`graph_send_failed: ${payload}`);
+  }
+
+  console.log(`[MAILER] ${label} sent via Microsoft Graph in ${Date.now() - startedAt}ms to`, toRecipients.map((entry) => entry.emailAddress.address).join(', '));
+  return { provider: 'graph' };
+}
+
 async function sendMailWithDiagnostics(message, label) {
   const startedAt = Date.now();
   try {
+    if (isGraphConfigured()) {
+      return await sendMailWithGraph(message, label);
+    }
+
     const transporter = await getTransporter();
     if (!transporter) {
       throw new Error('smtp_not_configured');
@@ -137,6 +240,8 @@ export default {
       resolvedHost: resolvedSmtpHost,
       port: SMTP_PORT,
       user: SMTP_USER || '',
+      graphConfigured: isGraphConfigured(),
+      graphSenderEmail: GRAPH_SENDER_EMAIL,
       fromEmail: FROM_EMAIL,
       ownerEmail: OWNER_EMAIL,
       placeholderPassword: SMTP_PLACEHOLDER
