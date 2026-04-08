@@ -1,6 +1,7 @@
 // Mailer service (ESM) - migrated from EmailJS to nodemailer
 import fs from 'fs/promises';
 import path from 'path';
+import dns from 'dns';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 import { getWhatsAppService } from './whatsapp.js';
@@ -66,6 +67,10 @@ function makeTransporter() {
     connectionTimeout: 15000,
     greetingTimeout: 10000,
     socketTimeout: 20000,
+    family: 4,
+    lookup(hostname, options, callback) {
+      return dns.lookup(hostname, { family: 4, all: false }, callback);
+    },
     auth: {
       user: SMTP_USER,
       pass: SMTP_PASS,
