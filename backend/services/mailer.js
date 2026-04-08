@@ -32,6 +32,8 @@ const SMTP_PASS = process.env.SMTP_PASS || null;
 const FROM_EMAIL = process.env.FROM_EMAIL || 'postamaster@isolalido.it';
 const OWNER_EMAIL = process.env.OWNER_EMAIL || 'info@isolalido.it';
 const SMTP_PLACEHOLDER = (SMTP_PASS || '').includes('PUT_YOUR_OUTLOOK_APP_PASSWORD_HERE');
+let resolvedSmtpHost = '';
+let transporterPromise = null;
 
 function formatCentsToEuro(cents) {
   try {
@@ -54,29 +56,49 @@ async function renderTemplate(vars = {}, templatePath = TEMPLATE_PATH) {
   }
 }
 
-function makeTransporter() {
+async function makeTransporter() {
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS || SMTP_PLACEHOLDER) {
     console.warn('[MAILER] SMTP credentials not fully configured. Emails will not be sent. Set SMTP_HOST/SMTP_USER/SMTP_PASS with a real password/app password.');
     return null;
   }
-  console.log('[MAILER] Creating transporter with host', SMTP_HOST, 'port', SMTP_PORT, 'user', SMTP_USER);
+  let transportHost = SMTP_HOST;
+
+  try {
+    const ipv4Addresses = await dns.promises.resolve4(SMTP_HOST);
+    if (ipv4Addresses && ipv4Addresses.length > 0) {
+      resolvedSmtpHost = ipv4Addresses[0];
+      transportHost = resolvedSmtpHost;
+      console.log('[MAILER] Resolved SMTP host to IPv4', transportHost, 'for', SMTP_HOST);
+    }
+  } catch (error) {
+    resolvedSmtpHost = '';
+    console.warn('[MAILER] IPv4 resolution failed, falling back to hostname:', summarizeMailError(error));
+  }
+
+  console.log('[MAILER] Creating transporter with host', transportHost, 'port', SMTP_PORT, 'user', SMTP_USER);
   return nodemailer.createTransport({
-    host: SMTP_HOST,
+    host: transportHost,
     port: SMTP_PORT,
     secure: SMTP_PORT === 465,
     connectionTimeout: 15000,
     greetingTimeout: 10000,
     socketTimeout: 20000,
-    family: 4,
-    lookup(hostname, options, callback) {
-      return dns.lookup(hostname, { family: 4, all: false }, callback);
-    },
     auth: {
       user: SMTP_USER,
       pass: SMTP_PASS,
     },
-    tls: { rejectUnauthorized: false } // evita blocchi su alcune piattaforme serverless
+    tls: {
+      rejectUnauthorized: false,
+      servername: SMTP_HOST,
+    } // evita blocchi su alcune piattaforme serverless
   });
+}
+
+async function getTransporter() {
+  if (!transporterPromise) {
+    transporterPromise = makeTransporter();
+  }
+  return transporterPromise;
 }
 
 function summarizeMailError(error) {
@@ -94,6 +116,10 @@ function summarizeMailError(error) {
 async function sendMailWithDiagnostics(message, label) {
   const startedAt = Date.now();
   try {
+    const transporter = await getTransporter();
+    if (!transporter) {
+      throw new Error('smtp_not_configured');
+    }
     const info = await transporter.sendMail(message);
     console.log(`[MAILER] ${label} sent in ${Date.now() - startedAt}ms:`, info.messageId || info);
     return info;
@@ -103,13 +129,12 @@ async function sendMailWithDiagnostics(message, label) {
   }
 }
 
-const transporter = makeTransporter();
-
 export default {
   getTransportStatus() {
     return {
-      configured: Boolean(transporter),
+      configured: Boolean(SMTP_HOST && SMTP_USER && SMTP_PASS && !SMTP_PLACEHOLDER),
       host: SMTP_HOST || '',
+      resolvedHost: resolvedSmtpHost,
       port: SMTP_PORT,
       user: SMTP_USER || '',
       fromEmail: FROM_EMAIL,
@@ -119,6 +144,7 @@ export default {
   },
 
   async verifyConnection() {
+    const transporter = await getTransporter();
     if (!transporter) {
       return {
         ok: false,
@@ -174,6 +200,7 @@ export default {
 
       const html = await renderTemplate(vars);
 
+      const transporter = await getTransporter();
       if (!transporter) {
         console.log('[MAILER] Skipping sendOwnerNotification (transporter not configured).');
         return true;
@@ -288,6 +315,7 @@ export default {
         `;
       }
 
+      const transporter = await getTransporter();
       if (!transporter) {
         console.log('[MAILER] Skipping sendCustomerConfirmation (transporter not configured).');
         return true;
