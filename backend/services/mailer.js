@@ -63,12 +63,39 @@ function makeTransporter() {
     host: SMTP_HOST,
     port: SMTP_PORT,
     secure: SMTP_PORT === 465,
+    connectionTimeout: 15000,
+    greetingTimeout: 10000,
+    socketTimeout: 20000,
     auth: {
       user: SMTP_USER,
       pass: SMTP_PASS,
     },
     tls: { rejectUnauthorized: false } // evita blocchi su alcune piattaforme serverless
   });
+}
+
+function summarizeMailError(error) {
+  if (!error) return { message: 'unknown_error' };
+
+  return {
+    message: error.message || String(error),
+    code: error.code || '',
+    command: error.command || '',
+    response: error.response || '',
+    responseCode: error.responseCode || '',
+  };
+}
+
+async function sendMailWithDiagnostics(message, label) {
+  const startedAt = Date.now();
+  try {
+    const info = await transporter.sendMail(message);
+    console.log(`[MAILER] ${label} sent in ${Date.now() - startedAt}ms:`, info.messageId || info);
+    return info;
+  } catch (error) {
+    console.error(`[MAILER] ${label} failed after ${Date.now() - startedAt}ms:`, summarizeMailError(error));
+    throw error;
+  }
 }
 
 const transporter = makeTransporter();
@@ -147,13 +174,12 @@ export default {
         return true;
       }
 
-      const info = await transporter.sendMail({
+      const info = await sendMailWithDiagnostics({
         from: FROM_EMAIL,
         to: OWNER_EMAIL,
         subject: `Nuova prenotazione da ${vars.customer_name}`,
         html,
-      });
-      console.log('[MAILER] Owner notification sent:', info.messageId || info);
+      }, 'Owner notification');
       
       // Invia WhatsApp al proprietario
       try {
@@ -207,7 +233,7 @@ export default {
 
       return true;
     } catch (err) {
-      console.error('[MAILER] sendOwnerNotification error:', err);
+      console.error('[MAILER] sendOwnerNotification error:', summarizeMailError(err));
       return false;
     }
   },
@@ -262,16 +288,15 @@ export default {
         return true;
       }
 
-      const info = await transporter.sendMail({
+      const info = await sendMailWithDiagnostics({
         from: FROM_EMAIL,
         to,
         subject: 'Conferma prenotazione - Isola Lido',
         html: html,
-      });
-      console.log('[MAILER] Customer confirmation sent:', info.messageId || info);
+      }, 'Customer confirmation');
       return true;
     } catch (err) {
-      console.error('[MAILER] sendCustomerConfirmation error:', err);
+      console.error('[MAILER] sendCustomerConfirmation error:', summarizeMailError(err));
       return false;
     }
   }
