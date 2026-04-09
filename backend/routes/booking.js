@@ -4,6 +4,12 @@ import { randomUUID } from 'crypto';
 import Booking from '../models/booking.js';
 import Donation from '../models/donation.js';
 import mailer from '../services/mailer.js';
+import {
+  acquireCustomerConfirmationLock,
+  hasCustomerConfirmationBeenSent,
+  markCustomerConfirmationSent,
+  releaseCustomerConfirmationLock
+} from '../services/booking-notification-state.js';
 
 const router = express.Router();
 const TAVOLI_TOTALI = 110;
@@ -469,6 +475,38 @@ async function sendAdminBookingEmails(booking) {
   }
 }
 
+async function sendCustomerConfirmationOnce(booking, amount) {
+  if (!booking?._id) return false;
+  if (!booking?.email || !booking.email.includes('@')) return false;
+  if (hasCustomerConfirmationBeenSent(booking)) return false;
+
+  const lockAcquired = await acquireCustomerConfirmationLock(booking._id);
+  if (!lockAcquired) return false;
+
+  try {
+    const sent = await mailer.sendCustomerConfirmation({
+      to: booking.email,
+      booking,
+      amount
+    });
+
+    if (sent) {
+      await markCustomerConfirmationSent(booking._id);
+      booking.customerConfirmationSentAt = new Date();
+      booking.customerConfirmationSendingAt = null;
+      return true;
+    }
+
+    await releaseCustomerConfirmationLock(booking._id);
+    booking.customerConfirmationSendingAt = null;
+    return false;
+  } catch (error) {
+    await releaseCustomerConfirmationLock(booking._id);
+    booking.customerConfirmationSendingAt = null;
+    throw error;
+  }
+}
+
 router.patch('/cancella', async (req, res) => {
   try {
     const { email, date } = req.body || {};
@@ -889,7 +927,9 @@ router.post('/sync-stripe', requireAdminAccess, async (req, res) => {
 
       if (isBookingPayload(bookingData)) {
         const incomingTableNumbers = normalizeTableNumbers(bookingData.tableNumbers || []);
-        const existingBooking = await Booking.findOne({ paymentId: session.id }).select('_id').lean();
+        const existingBooking = await Booking.findOne({ paymentId: session.id })
+          .select('_id customerConfirmationSentAt customerConfirmationSendingAt')
+          .lean();
 
         if (bookingStatus !== 'active' && !existingBooking) {
           skipped++;
@@ -938,9 +978,10 @@ router.post('/sync-stripe', requireAdminAccess, async (req, res) => {
         );
         bookingsUpserted++;
 
-        if (bookingStatus === 'active') {
+        if (bookingStatus === 'active' && !existingBooking) {
           try {
-            await mailer.sendOwnerNotification({ booking: bookingDoc, amount: payload.amount, notifyCustomer: true });
+            await mailer.sendOwnerNotification({ booking: bookingDoc, amount: payload.amount, notifyCustomer: false });
+            await sendCustomerConfirmationOnce(bookingDoc, payload.amount);
           } catch (mailErr) {
             console.warn('[Booking] Email notification failed during sync:', mailErr);
           }

@@ -20,6 +20,8 @@ const bookingSchema = new mongoose.Schema(
     refundedAmount: { type: Number, min: 0, default: 0 },
     lastRefundId: { type: String, trim: true, default: '' },
     lastRefundAt: { type: Date, default: null },
+    customerConfirmationSentAt: { type: Date, default: null },
+    customerConfirmationSendingAt: { type: Date, default: null },
     status: { type: String, trim: true, default: 'active', index: true },
     source: { type: String, trim: true, default: 'stripe_checkout' },
     paidAt: { type: Date, default: Date.now, index: true }

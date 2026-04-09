@@ -3,6 +3,12 @@ import Stripe from 'stripe';
 import Booking from './models/booking.js';
 import Donation from './models/donation.js';
 import mailer from './services/mailer.js';
+import {
+  acquireCustomerConfirmationLock,
+  hasCustomerConfirmationBeenSent,
+  markCustomerConfirmationSent,
+  releaseCustomerConfirmationLock
+} from './services/booking-notification-state.js';
 
 const router = express.Router();
 const TAVOLI_TOTALI = 110;
@@ -70,6 +76,38 @@ async function findTableConflict(date, tableNumbers) {
     date,
     tableNumbers: { $in: numbers }
   }).lean();
+}
+
+async function sendCustomerConfirmationOnce(booking, amount) {
+  if (!booking?._id) return false;
+  if (!booking?.email || !booking.email.includes('@')) return false;
+  if (hasCustomerConfirmationBeenSent(booking)) return false;
+
+  const lockAcquired = await acquireCustomerConfirmationLock(booking._id);
+  if (!lockAcquired) return false;
+
+  try {
+    const sent = await mailer.sendCustomerConfirmation({
+      to: booking.email,
+      booking,
+      amount
+    });
+
+    if (sent) {
+      await markCustomerConfirmationSent(booking._id);
+      booking.customerConfirmationSentAt = new Date();
+      booking.customerConfirmationSendingAt = null;
+      return true;
+    }
+
+    await releaseCustomerConfirmationLock(booking._id);
+    booking.customerConfirmationSendingAt = null;
+    return false;
+  } catch (error) {
+    await releaseCustomerConfirmationLock(booking._id);
+    booking.customerConfirmationSendingAt = null;
+    throw error;
+  }
 }
 
 function getStringValue(value) {
@@ -253,6 +291,10 @@ router.post('/webhook', async (req, res) => {
       let bookingPayloadForMail = null;
       try {
         const metadata = session?.metadata || {};
+        const existingBooking = session?.id
+          ? await Booking.findOne({ paymentId: session.id })
+            .select('_id bookingId customerConfirmationSentAt customerConfirmationSendingAt')
+          : null;
         const incomingTableNumbers = Array.isArray(bookingData.tableNumbers)
           ? bookingData.tableNumbers.map((n) => Number(n)).filter((n) => Number.isInteger(n) && n >= 1 && n <= TAVOLI_TOTALI)
           : [];
@@ -272,7 +314,9 @@ router.post('/webhook', async (req, res) => {
 
         const hasBookingPayload = Boolean(normalizedBooking.date) && (normalizedBooking.tables + normalizedBooking.chairs + normalizedBooking.umbrellas) > 0;
         if (hasBookingPayload) {
-          const existingConflict = await findTableConflict(normalizedBooking.date, normalizedBooking.tableNumbers);
+          const existingConflict = existingBooking
+            ? null
+            : await findTableConflict(normalizedBooking.date, normalizedBooking.tableNumbers);
           if (existingConflict) {
             console.warn(
               '[Stripe Webhook] tavolo gia prenotato per la data richiesta, salto salvataggio:',
@@ -282,23 +326,40 @@ router.post('/webhook', async (req, res) => {
             return res.json({ received: true, ignored: 'table_already_booked' });
           }
 
-          bookingRecord = await Booking.create({
-            ...normalizedBooking,
-            email: session.customer_email,
-            paymentId: session.id,
-            paymentIntentId: getStringValue(session.payment_intent),
-            amount: session.amount_total,
-            refundedAmount: 0,
-            paymentStatus: session.payment_status || 'paid',
-            status: 'active'
-          });
+          bookingRecord = await Booking.findOneAndUpdate(
+            { paymentId: session.id },
+            {
+              $set: {
+                ...normalizedBooking,
+                email: session.customer_email,
+                paymentId: session.id,
+                paymentIntentId: getStringValue(session.payment_intent),
+                amount: session.amount_total,
+                refundedAmount: 0,
+                paymentStatus: session.payment_status || 'paid',
+                status: 'active'
+              },
+              $setOnInsert: {
+                customerConfirmationSentAt: null,
+                customerConfirmationSendingAt: null
+              }
+            },
+            {
+              upsert: true,
+              new: true,
+              setDefaultsOnInsert: true
+            }
+          );
           bookingPayloadForMail = {
             ...normalizedBooking,
+            _id: bookingRecord?._id,
             id: bookingRecord?.bookingId || bookingRecord?._id || normalizedBooking.bookingId,
             booking_id: bookingRecord?.bookingId || bookingRecord?._id || normalizedBooking.bookingId,
             email: session.customer_email || '',
             paymentId: session.id || '',
-            amount: session.amount_total || 0
+            amount: session.amount_total || 0,
+            customerConfirmationSentAt: bookingRecord?.customerConfirmationSentAt || null,
+            customerConfirmationSendingAt: bookingRecord?.customerConfirmationSendingAt || null
           };
         } else {
           await Donation.create({
@@ -328,13 +389,11 @@ router.post('/webhook', async (req, res) => {
           });
           console.log('[Stripe Webhook] owner email sent:', ownerSent);
 
-          if (session.customer_email && session.customer_email.includes('@')) {
-            const customerSent = await mailer.sendCustomerConfirmation({
-              to: session.customer_email,
-              booking: bookingForMail,
-              amount: session.amount_total
-            });
+          if (bookingRecord?._id) {
+            const customerSent = await sendCustomerConfirmationOnce(bookingRecord, session.amount_total);
             console.log('[Stripe Webhook] customer email sent:', customerSent, 'to:', session.customer_email);
+          } else if (session.customer_email && session.customer_email.includes('@')) {
+            console.warn('[Stripe Webhook] booking non persistita, salto conferma cliente per evitare doppi invii');
           } else {
             console.warn('[Stripe Webhook] customer email missing/invalid, skip confirmation');
           }
