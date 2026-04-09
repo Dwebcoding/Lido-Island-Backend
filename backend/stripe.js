@@ -4,9 +4,13 @@ import Booking from './models/booking.js';
 import Donation from './models/donation.js';
 import mailer from './services/mailer.js';
 import {
+  acquireOwnerNotificationLock,
   acquireCustomerConfirmationLock,
+  hasOwnerNotificationBeenSent,
   hasCustomerConfirmationBeenSent,
+  markOwnerNotificationSent,
   markCustomerConfirmationSent,
+  releaseOwnerNotificationLock,
   releaseCustomerConfirmationLock
 } from './services/booking-notification-state.js';
 
@@ -106,6 +110,37 @@ async function sendCustomerConfirmationOnce(booking, amount) {
   } catch (error) {
     await releaseCustomerConfirmationLock(booking._id);
     booking.customerConfirmationSendingAt = null;
+    throw error;
+  }
+}
+
+async function sendOwnerNotificationOnce(booking, amount) {
+  if (!booking?._id) return false;
+  if (hasOwnerNotificationBeenSent(booking)) return false;
+
+  const lockAcquired = await acquireOwnerNotificationLock(booking._id);
+  if (!lockAcquired) return false;
+
+  try {
+    const sent = await mailer.sendOwnerNotification({
+      booking,
+      amount,
+      notifyCustomer: false
+    });
+
+    if (sent) {
+      await markOwnerNotificationSent(booking._id);
+      booking.ownerNotificationSentAt = new Date();
+      booking.ownerNotificationSendingAt = null;
+      return true;
+    }
+
+    await releaseOwnerNotificationLock(booking._id);
+    booking.ownerNotificationSendingAt = null;
+    return false;
+  } catch (error) {
+    await releaseOwnerNotificationLock(booking._id);
+    booking.ownerNotificationSendingAt = null;
     throw error;
   }
 }
@@ -293,7 +328,7 @@ router.post('/webhook', async (req, res) => {
         const metadata = session?.metadata || {};
         const existingBooking = session?.id
           ? await Booking.findOne({ paymentId: session.id })
-            .select('_id bookingId customerConfirmationSentAt customerConfirmationSendingAt')
+            .select('_id bookingId ownerNotificationSentAt ownerNotificationSendingAt customerConfirmationSentAt customerConfirmationSendingAt')
           : null;
         const incomingTableNumbers = Array.isArray(bookingData.tableNumbers)
           ? bookingData.tableNumbers.map((n) => Number(n)).filter((n) => Number.isInteger(n) && n >= 1 && n <= TAVOLI_TOTALI)
@@ -340,6 +375,8 @@ router.post('/webhook', async (req, res) => {
                 status: 'active'
               },
               $setOnInsert: {
+                ownerNotificationSentAt: null,
+                ownerNotificationSendingAt: null,
                 customerConfirmationSentAt: null,
                 customerConfirmationSendingAt: null
               }
@@ -358,6 +395,8 @@ router.post('/webhook', async (req, res) => {
             email: session.customer_email || '',
             paymentId: session.id || '',
             amount: session.amount_total || 0,
+            ownerNotificationSentAt: bookingRecord?.ownerNotificationSentAt || null,
+            ownerNotificationSendingAt: bookingRecord?.ownerNotificationSendingAt || null,
             customerConfirmationSentAt: bookingRecord?.customerConfirmationSentAt || null,
             customerConfirmationSendingAt: bookingRecord?.customerConfirmationSendingAt || null
           };
@@ -382,11 +421,9 @@ router.post('/webhook', async (req, res) => {
       try {
         if (!createdDonation) {
           const bookingForMail = bookingPayloadForMail || { ...bookingData, email: session.customer_email };
-          const ownerSent = await mailer.sendOwnerNotification({
-            booking: bookingForMail,
-            amount: session.amount_total,
-            notifyCustomer: false
-          });
+          const ownerSent = bookingRecord?._id
+            ? await sendOwnerNotificationOnce(bookingRecord, session.amount_total)
+            : false;
           console.log('[Stripe Webhook] owner email sent:', ownerSent);
 
           if (bookingRecord?._id) {

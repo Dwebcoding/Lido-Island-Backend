@@ -5,9 +5,13 @@ import Booking from '../models/booking.js';
 import Donation from '../models/donation.js';
 import mailer from '../services/mailer.js';
 import {
+  acquireOwnerNotificationLock,
   acquireCustomerConfirmationLock,
+  hasOwnerNotificationBeenSent,
   hasCustomerConfirmationBeenSent,
+  markOwnerNotificationSent,
   markCustomerConfirmationSent,
+  releaseOwnerNotificationLock,
   releaseCustomerConfirmationLock
 } from '../services/booking-notification-state.js';
 
@@ -507,6 +511,37 @@ async function sendCustomerConfirmationOnce(booking, amount) {
   }
 }
 
+async function sendOwnerNotificationOnce(booking, amount) {
+  if (!booking?._id) return false;
+  if (hasOwnerNotificationBeenSent(booking)) return false;
+
+  const lockAcquired = await acquireOwnerNotificationLock(booking._id);
+  if (!lockAcquired) return false;
+
+  try {
+    const sent = await mailer.sendOwnerNotification({
+      booking,
+      amount,
+      notifyCustomer: false
+    });
+
+    if (sent) {
+      await markOwnerNotificationSent(booking._id);
+      booking.ownerNotificationSentAt = new Date();
+      booking.ownerNotificationSendingAt = null;
+      return true;
+    }
+
+    await releaseOwnerNotificationLock(booking._id);
+    booking.ownerNotificationSendingAt = null;
+    return false;
+  } catch (error) {
+    await releaseOwnerNotificationLock(booking._id);
+    booking.ownerNotificationSendingAt = null;
+    throw error;
+  }
+}
+
 router.patch('/cancella', async (req, res) => {
   try {
     const { email, date } = req.body || {};
@@ -928,7 +963,7 @@ router.post('/sync-stripe', requireAdminAccess, async (req, res) => {
       if (isBookingPayload(bookingData)) {
         const incomingTableNumbers = normalizeTableNumbers(bookingData.tableNumbers || []);
         const existingBooking = await Booking.findOne({ paymentId: session.id })
-          .select('_id customerConfirmationSentAt customerConfirmationSendingAt')
+          .select('_id ownerNotificationSentAt ownerNotificationSendingAt customerConfirmationSentAt customerConfirmationSendingAt')
           .lean();
 
         if (bookingStatus !== 'active' && !existingBooking) {
@@ -980,7 +1015,7 @@ router.post('/sync-stripe', requireAdminAccess, async (req, res) => {
 
         if (bookingStatus === 'active' && !existingBooking) {
           try {
-            await mailer.sendOwnerNotification({ booking: bookingDoc, amount: payload.amount, notifyCustomer: false });
+            await sendOwnerNotificationOnce(bookingDoc, payload.amount);
             await sendCustomerConfirmationOnce(bookingDoc, payload.amount);
           } catch (mailErr) {
             console.warn('[Booking] Email notification failed during sync:', mailErr);
